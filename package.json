@@ -1,0 +1,31 @@
+{
+  "name": "heungtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "香港活動智能日曆：散場後按步行、空位與尾班車經 WhatsApp 訂座。",
+  "scripts": {
+    "dev": "next dev -p 3289",
+    "build": "next build",
+    "start": "next start -p 3289",
+    "lint": "next lint",
+    "test": "tsx --test lib/rank.test.ts"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.542.0",
+    "next": "^15.5.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.12",
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "eslint": "^9.34.0",
+    "eslint-config-next": "^15.5.2",
+    "tailwindcss": "^4.1.12",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.2"
+  }
+}
