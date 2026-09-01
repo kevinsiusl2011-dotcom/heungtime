@@ -21,7 +21,7 @@ const FILTERS: { id: EventCategory | "all"; label: string }[] = [
 ];
 
 export default function DiscoverPage() {
-  const { pinEvent, calendar, click, prefs, bookings, inventory } = useStore();
+  const { pinEvent, calendar, click, prefs, bookings, inventory, catalogRev } = useStore();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("all");
   const [q, setQ] = useState("");
   const [booking, setBooking] = useState<{ restaurantId: string; eventId: string } | null>(
@@ -38,7 +38,7 @@ export default function DiscoverPage() {
         return blob.includes(needle);
       })
       .sort((a, b) => +new Date(a.startAt) - +new Date(b.startAt));
-  }, [filter, q]);
+  }, [filter, q, catalogRev]);
 
   return (
     <AppShell>
@@ -55,7 +55,7 @@ export default function DiscoverPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="搜尋歌手、場地、商場、賽事…"
-            className="w-full rounded-full border border-line bg-field px-5 py-2.5 text-sm md:max-w-sm"
+            className="w-full rounded-xl border border-line bg-field px-5 py-2.5 text-sm md:max-w-sm"
             aria-label="搜尋活動"
           />
           <div className="flex flex-wrap gap-2">
@@ -63,7 +63,7 @@ export default function DiscoverPage() {
               <button
                 key={f.id}
                 onClick={() => setFilter(f.id)}
-                className={`rounded-full px-4 py-2 text-sm ${
+                className={`rounded-xl px-4 py-2 text-sm font-bold ${
                   filter === f.id ? "bg-gold text-bg" : "border border-line text-muted"
                 }`}
               >
@@ -90,7 +90,7 @@ export default function DiscoverPage() {
                   <p className="text-xs text-mint">
                     {feed?.name} · {venue?.district}
                   </p>
-                  <h2 className="mt-1 font-[family-name:var(--font-serif-tc)] text-2xl">
+                  <h2 className="mt-1 display text-2xl">
                     <Link href={`/events/${event.id}`} className="hover:text-gold">
                       {event.title}
                     </Link>

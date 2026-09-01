@@ -18,7 +18,7 @@ export default function FaqPage() {
     },
     {
       q: "我的日曆資料去咗邊？",
-      a: "預設存在你的瀏覽器。沒有強制註冊，也沒有把行程賣給第三方廣告網絡。詳見私隱政策。",
+      a: "偏好與日曆副本存在你的瀏覽器，也可用同步碼備份。訂座席位、確認編號與入座核銷寫入伺服器，避免撞枱。詳見私隱政策。",
     },
     {
       q: "尾班車時間準不準？",
@@ -29,7 +29,7 @@ export default function FaqPage() {
   return (
     <AppShell>
       <main id="main" className="mx-auto max-w-3xl px-5 py-10">
-        <h1 className="font-[family-name:var(--font-serif-tc)] text-4xl">常見問題</h1>
+        <h1 className="display text-4xl">常見問題</h1>
         <div className="mt-8 space-y-6">
           {items.map((item) => (
             <article key={item.q} className="border-b border-line pb-6">

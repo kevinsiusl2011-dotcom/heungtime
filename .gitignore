@@ -7,6 +7,9 @@ dist
 .env
 .env*.local
 data/*.json
+data/*.sqlite
+data/*.sqlite-wal
+data/*.sqlite-shm
 *.tsbuildinfo
 
 .vercel

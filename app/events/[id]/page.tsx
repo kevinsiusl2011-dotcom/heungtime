@@ -17,13 +17,13 @@ import { useStore } from "@/lib/store";
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
   const event = eventById(params.id);
-  const { pinEvent, calendar, click, prefs, bookings, inventory, coords } = useStore();
+  const { pinEvent, calendar, click, prefs, bookings, inventory, coords, catalogRev } = useStore();
   const [booking, setBooking] = useState<string | null>(null);
   const [emailOpen, setEmailOpen] = useState(false);
 
   const recs = useMemo(
     () => (event ? recommendRestaurants(event, prefs, bookings, 3, inventory) : []),
-    [event, prefs, bookings, inventory],
+    [event, prefs, bookings, inventory, catalogRev],
   );
   const plan = event ? buildNightPlan(event, calendar, prefs, coords) : null;
   const venue = event ? venueById(event.venueId) : undefined;
@@ -34,7 +34,7 @@ export default function EventDetailPage() {
     return (
       <AppShell>
         <main id="main" className="mx-auto max-w-3xl px-5 py-20 text-center">
-          <h1 className="font-[family-name:var(--font-serif-tc)] text-3xl">找不到此活動</h1>
+          <h1 className="display text-3xl">找不到此活動</h1>
           <p className="mt-3 text-muted">可能已過檔期，或連結不正確。</p>
           <Link href="/discover" className="mt-6 inline-block rounded-full bg-gold px-5 py-2 text-bg">
             返回發現活動
@@ -58,7 +58,7 @@ export default function EventDetailPage() {
         <p className="text-xs text-mint">
           {CATEGORY_LABEL[event.category]} · {venue?.district}
         </p>
-        <h1 className="mt-2 font-[family-name:var(--font-serif-tc)] text-4xl">{event.title}</h1>
+        <h1 className="mt-2 display text-4xl">{event.title}</h1>
         <p className="mt-2 text-muted">
           {formatDateTime(event.startAt)} – {formatTime(event.endAt)} · {venue?.name}
         </p>
@@ -79,7 +79,7 @@ export default function EventDetailPage() {
               <button
                 onClick={() => pinEvent(event.id)}
                 disabled={pinned}
-                className="rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-bg disabled:opacity-50"
+                className="rounded-xl bg-gold px-5 py-2.5 text-sm font-black text-bg disabled:opacity-50"
               >
                 {pinned ? "已加入日曆" : "加入日曆"}
               </button>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function Brand({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const text = size === "lg" ? "text-3xl" : size === "sm" ? "text-lg" : "text-xl";
@@ -47,6 +48,7 @@ export function Nav({ solid = false }: { solid?: boolean }) {
           ))}
         </nav>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Link href="/account" className="hidden rounded-xl border border-line px-4 py-2 text-sm md:inline">
             帳戶
           </Link>

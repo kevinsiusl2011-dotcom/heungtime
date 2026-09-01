@@ -2,16 +2,68 @@ import { venueById } from "./data";
 
 const DISTRICT_TO_MTR: Record<string, number> = {
   中環: 0,
+  金鐘: 3,
   灣仔: 8,
   銅鑼灣: 14,
+  天后: 16,
   尖沙咀: 12,
+  佐敦: 14,
+  油麻地: 16,
   旺角: 18,
+  太子: 20,
   紅磡: 16,
+  柯士甸: 11,
   西九: 10,
+  九龍: 9,
   啟德: 22,
+  鑽石山: 24,
   沙田: 32,
+  大圍: 28,
   東涌: 38,
+  機場: 42,
+  會展: 7,
 };
+
+export const LAST_TRAIN_BY_STATION: Record<string, string> = {
+  中環: "01:00",
+  金鐘: "00:58",
+  灣仔: "00:56",
+  銅鑼灣: "00:54",
+  天后: "00:52",
+  尖沙咀: "00:52",
+  佐敦: "00:50",
+  油麻地: "00:48",
+  旺角: "00:46",
+  太子: "00:44",
+  紅磡: "00:32",
+  柯士甸: "00:48",
+  西九: "00:50",
+  九龍: "00:54",
+  啟德: "00:28",
+  鑽石山: "00:30",
+  沙田: "00:22",
+  大圍: "00:26",
+  東涌: "00:48",
+  機場: "00:48",
+  會展: "00:58",
+  亞博: "00:48",
+  戲曲中心: "00:50",
+};
+
+export function normalizeStation(name: string) {
+  return name.replace(/站$/, "").replace(/／.*/, "").replace(/\/.*/, "").trim();
+}
+
+export function lastTrainForStation(station: string) {
+  const key = normalizeStation(station);
+  return LAST_TRAIN_BY_STATION[key] ?? LAST_TRAIN_BY_STATION[station] ?? "00:30";
+}
+
+export function lastTrainForVenue(venue: { mtr: string; lastTrain: string }) {
+  const key = normalizeStation(venue.mtr);
+  if (LAST_TRAIN_BY_STATION[key]) return LAST_TRAIN_BY_STATION[key];
+  return venue.lastTrain || "00:30";
+}
 
 export const DISTRICT_COORDS: Record<string, { lat: number; lng: number }> = {
   中環: { lat: 22.2819, lng: 114.158 },

@@ -77,6 +77,7 @@ export interface UserProfile {
   email: string;
   onboarded: boolean;
   prefs: UserPrefs;
+  syncKey?: string;
 }
 
 export interface RankedRestaurant extends Restaurant {
@@ -106,12 +107,14 @@ export interface Booking {
   partySize: number;
   slot: string;
   date: string;
-  status: "pending" | "confirmed" | "cancelled";
+  status: "pending" | "confirmed" | "cancelled" | "attended";
   via: "autochat";
   guestName: string;
   guestPhone: string;
   confirmationCode: string;
   createdAt: string;
+  attendedAt?: string;
+  whatsappDispatched?: boolean;
 }
 
 export interface ChatMessage {
@@ -156,4 +159,29 @@ export interface MerchantLead {
   phone: string;
   note: string;
   createdAt: string;
+}
+
+export interface CatalogPayload {
+  venues?: Venue[];
+  events?: LocalEvent[];
+  restaurants?: Restaurant[];
+}
+
+export interface CpaEntry {
+  id: string;
+  bookingId: string;
+  restaurantId: string;
+  amount: number;
+  status: "billed" | "void";
+  createdAt: string;
+}
+
+export interface SyncPayload {
+  feeds: FeedId[];
+  calendar: CalendarItem[];
+  bookings: Booking[];
+  impressions: Record<string, number>;
+  clicks: Record<string, number>;
+  profile: UserProfile;
+  coords?: { lat: number; lng: number } | null;
 }

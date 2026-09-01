@@ -26,7 +26,7 @@ export function Footer() {
         </div>
       </div>
       <p className="border-t border-line px-5 py-4 text-center text-xs text-muted">
-        © {new Date().getFullYear()} 享時 HeungTime · 資料存於你的裝置
+        © {new Date().getFullYear()} 享時 HeungTime · 偏好存於裝置，訂座席位存於伺服器
       </p>
     </footer>
   );

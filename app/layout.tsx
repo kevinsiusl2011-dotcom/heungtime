@@ -30,11 +30,13 @@ export const metadata: Metadata = {
   },
   robots: { index: true, follow: true },
   alternates: { canonical: "/" },
-  appleWebApp: { capable: true, title: "享時", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "享時", statusBarStyle: "default" },
 };
 
+const themeBoot = `(function(){try{var t=localStorage.getItem("heungtime-theme");document.documentElement.setAttribute("data-theme",t==="dark"?"dark":"light");}catch(e){document.documentElement.setAttribute("data-theme","light");}})();`;
+
 export const viewport: Viewport = {
-  themeColor: "#d6ff3a",
+  themeColor: "#f3eee4",
 };
 
 export default function RootLayout({
@@ -43,14 +45,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-HK">
+    <html lang="zh-HK" data-theme="light" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Sora:wght@500;700&family=Syne:wght@700;800&display=swap"
-          rel="stylesheet"
-        />
+        <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
       </head>
       <body className="antialiased">
         <StoreProvider>

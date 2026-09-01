@@ -34,11 +34,11 @@ export function Onboarding() {
     <Modal onClose={() => updateProfile({ onboarded: true })} labelledBy="onboard-title">
       <form onSubmit={onSubmit} className="space-y-4 px-5 py-5">
         <p className="text-xs uppercase tracking-[0.2em] text-gold">開始使用</p>
-        <h2 id="onboard-title" className="font-[family-name:var(--font-serif-tc)] text-2xl">
+        <h2 id="onboard-title" className="display text-2xl">
           你的夜歸設定
         </h2>
         <p className="text-sm text-muted">
-          用來排餐廳、計尾班車同預填訂座。資料只存在你的裝置，可隨時在帳戶更改。
+          用來排餐廳、計尾班車同預填訂座。偏好存在此裝置；訂座席位會寫入伺服器以免撞枱。
         </p>
         <label className="block text-sm">
           稱呼
@@ -122,7 +122,7 @@ export function Onboarding() {
           >
             稍後
           </button>
-          <button type="submit" className="flex-1 rounded-full bg-gold py-3 text-sm font-medium text-bg">
+          <button type="submit" className="flex-1 rounded-xl bg-gold py-3 text-sm font-black text-bg">
             開始用享時
           </button>
         </div>

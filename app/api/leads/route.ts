@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
 import { saveLead } from "@/lib/server/persist";
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/server/rateLimit";
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const limited = rateLimit(`leads:${clientIp(req)}`, { limit: 8, windowMs: 60_000 });
+  if (!limited.ok) {
+    return NextResponse.json(rateLimitResponse(limited.retryAfter), {
+      status: 429,
+      headers: { "Retry-After": String(limited.retryAfter) },
+    });
+  }
   try {
     const body = (await req.json()) as {
       name?: string;

@@ -700,3 +700,22 @@ export function relatedEvent(event: LocalEvent) {
   if (!event.relatedEventId) return undefined;
   return eventById(event.relatedEventId);
 }
+
+function spliceAll<T>(target: T[], next: T[]) {
+  target.splice(0, target.length, ...next);
+}
+
+export function getCatalog() {
+  return { venues: VENUES, events: EVENTS, restaurants: RESTAURANTS };
+}
+
+export function applyCatalog(catalog: {
+  venues?: Venue[];
+  events?: LocalEvent[];
+  restaurants?: Restaurant[];
+}) {
+  if (catalog.venues?.length) spliceAll(VENUES, catalog.venues);
+  if (catalog.events?.length) spliceAll(EVENTS, catalog.events);
+  if (catalog.restaurants?.length) spliceAll(RESTAURANTS, catalog.restaurants);
+  return getCatalog();
+}

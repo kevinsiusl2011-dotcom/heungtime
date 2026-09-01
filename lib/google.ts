@@ -39,6 +39,18 @@ export async function exchangeCode(code: string) {
   return (await res.json()) as { access_token: string; refresh_token?: string; expires_in: number };
 }
 
+export async function refreshAccessToken(refreshToken: string) {
+  const body = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID ?? "",
+    client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+    refresh_token: refreshToken,
+    grant_type: "refresh_token",
+  });
+  const res = await fetch(TOKEN, { method: "POST", body });
+  if (!res.ok) throw new Error("Google refresh failed");
+  return (await res.json()) as { access_token: string; expires_in: number; refresh_token?: string };
+}
+
 export async function insertCalendarEvent(
   accessToken: string,
   event: {

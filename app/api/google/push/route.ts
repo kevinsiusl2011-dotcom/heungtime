@@ -1,16 +1,16 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { googleConfigured, insertCalendarEvent } from "@/lib/google";
+import { getValidAccessToken } from "@/lib/server/googleSession";
+
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   if (!googleConfigured()) {
     return NextResponse.json({ ok: false, error: "未接 Google" }, { status: 503 });
   }
-  const jar = await cookies();
-  const raw = jar.get("ht_google")?.value;
-  if (!raw) return NextResponse.json({ ok: false, error: "尚未授權" }, { status: 401 });
+  const access = await getValidAccessToken();
+  if (!access) return NextResponse.json({ ok: false, error: "尚未授權或授權已過期" }, { status: 401 });
   try {
-    const { access } = JSON.parse(raw) as { access: string };
     const body = (await req.json()) as {
       title: string;
       startAt: string;

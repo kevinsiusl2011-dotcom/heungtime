@@ -1,4 +1,4 @@
-import { EVENTS, RESTAURANTS, eventById, venueById } from "./data";
+import { EVENTS, RESTAURANTS, venueById } from "./data";
 import { formatDateTime, formatTime } from "./calendar";
 import { DEFAULT_PREFS } from "./labels";
 import { buildNightPlan, postEventSlot, recommendRestaurants } from "./rank";
@@ -71,7 +71,7 @@ export function autoChatScript(
   event: LocalEvent | undefined,
   partySize: number,
   slot: string,
-  guestName = "Kevin",
+  guestName = "客人",
 ) {
   const eventLine = event
     ? `我哋 ${formatTime(event.endAt)} 喺${venueById(event.venueId)?.name ?? ""}散場，想訂 ${slot} ${partySize} 位。`

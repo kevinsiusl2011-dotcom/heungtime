@@ -59,4 +59,5 @@ export const DEFAULT_PROFILE = {
   email: "",
   onboarded: false,
   prefs: DEFAULT_PREFS,
+  syncKey: "",
 };

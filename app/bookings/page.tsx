@@ -9,6 +9,7 @@ import { useStore } from "@/lib/store";
 import { bookingMessage, whatsappUrl } from "@/lib/whatsapp";
 
 function statusLabel(status: string) {
+  if (status === "attended") return "已入座";
   if (status === "confirmed") return "已確認";
   if (status === "cancelled") return "已取消";
   return "待確認";
@@ -22,7 +23,7 @@ export default function BookingsPage() {
     <AppShell>
       <main id="main" className="mx-auto max-w-3xl px-5 py-10">
         <p className="text-xs uppercase tracking-[0.2em] text-gold">我的訂座</p>
-        <h1 className="mt-2 font-[family-name:var(--font-serif-tc)] text-4xl">確認編號與狀態</h1>
+        <h1 className="mt-2 display text-4xl">確認編號與狀態</h1>
         <p className="mt-3 text-sm text-muted">
           訂座會扣伺服器席位。取消會還席。WhatsApp 連結只在席位確認後出現。
         </p>
@@ -59,7 +60,7 @@ export default function BookingsPage() {
               <article key={b.id} className="glass rounded-3xl p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-[family-name:var(--font-serif-tc)] text-xl">
+                    <p className="display text-xl">
                       {restaurant?.name ?? "餐廳"}
                     </p>
                     <p className="mt-1 text-sm text-muted">
@@ -73,11 +74,13 @@ export default function BookingsPage() {
                   </div>
                   <span
                     className={`rounded-full px-3 py-1 text-xs ${
-                      b.status === "confirmed"
+                      b.status === "attended"
                         ? "bg-mint/15 text-mint"
-                        : cancelled
-                          ? "bg-line text-muted"
-                          : "bg-gold/15 text-gold"
+                        : b.status === "confirmed"
+                          ? "bg-mint/15 text-mint"
+                          : cancelled
+                            ? "bg-line text-muted"
+                            : "bg-gold/15 text-gold"
                     }`}
                   >
                     {statusLabel(b.status)}
@@ -94,7 +97,7 @@ export default function BookingsPage() {
                         href={wa}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-full bg-mint px-4 py-2 text-sm font-medium text-bg"
+                        className="rounded-xl bg-mint px-4 py-2 text-sm font-black text-bg"
                       >
                         再傳 WhatsApp
                       </a>

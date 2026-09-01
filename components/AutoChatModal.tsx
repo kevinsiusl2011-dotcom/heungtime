@@ -21,18 +21,22 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
   const restaurant = restaurantById(restaurantId);
   const event = eventId ? eventById(eventId) : undefined;
   const { addBooking, profile, prefs, bookings, inventory } = useStore();
-  const ranked = event
-    ? recommendRestaurants(event, prefs, bookings, 8, inventory).find((r) => r.id === restaurantId)
-    : restaurant
-      ? {
-          ...restaurant,
-          walkMinutes: Object.values(restaurant.walkMinutesByVenue)[0] ?? 10,
-          score: 0,
-          reasons: [],
-          lastTrainRisk: restaurant.lastTrainSafe ? ("safe" as const) : ("tight" as const),
-          seatsRemaining: inventory[restaurantId] ?? restaurant.seatsLeft,
-        }
-      : undefined;
+  const ranked = useMemo(() => {
+    if (event) {
+      return recommendRestaurants(event, prefs, bookings, 8, inventory).find(
+        (r) => r.id === restaurantId,
+      );
+    }
+    if (!restaurant) return undefined;
+    return {
+      ...restaurant,
+      walkMinutes: Object.values(restaurant.walkMinutesByVenue)[0] ?? 10,
+      score: 0,
+      reasons: [] as string[],
+      lastTrainRisk: restaurant.lastTrainSafe ? ("safe" as const) : ("tight" as const),
+      seatsRemaining: inventory[restaurantId] ?? restaurant.seatsLeft,
+    };
+  }, [event, restaurant, prefs, bookings, inventory, restaurantId]);
 
   const [partySize, setPartySize] = useState(
     ranked?.partySizes.includes(prefs.partySize) ? prefs.partySize : ranked?.partySizes[0] ?? 2,
@@ -126,7 +130,7 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
       <div className="flex items-center justify-between border-b border-line px-5 py-4">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-mint">WhatsApp 訂座</p>
-          <h3 id="book-title" className="mt-1 font-[family-name:var(--font-serif-tc)] text-lg">
+          <h3 id="book-title" className="mt-1 display text-lg">
             {restaurant.name}
           </h3>
           <p className="text-sm text-muted">
@@ -196,7 +200,7 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
           <button
             disabled={!canSubmit}
             onClick={() => setStep("chat")}
-            className="w-full rounded-full bg-mint py-3 font-medium text-bg disabled:opacity-40"
+            className="w-full rounded-xl bg-mint py-3 font-black text-bg disabled:opacity-40"
           >
             預覽並發送訂座
           </button>
@@ -230,18 +234,19 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
                   {ranked.autoChatReady ? "即時留位已確認" : "訂座請求已建立，待商戶確認"}。編號{" "}
                   <span className="text-gold">{created?.confirmationCode}</span>
                   ，已寫入你的享時日曆。
+                  {created?.whatsappDispatched ? " 已用 WhatsApp Cloud 通知商戶。" : ""}
                 </>
               )}
-              {wa && created && (
-                <a
-                  href={wa}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 block w-full rounded-full bg-mint py-2 text-center font-medium text-bg"
-                >
-                  用 WhatsApp 傳送給商戶
-                </a>
-              )}
+                  {wa && created && (
+                    <a
+                      href={wa}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 block w-full rounded-xl bg-mint py-2.5 text-center font-black text-bg"
+                    >
+                      {created.whatsappDispatched ? "備用：再開 WhatsApp" : "用 WhatsApp 傳送給商戶"}
+                    </a>
+                  )}
               {created && (
                 <button
                   onClick={() =>
@@ -254,7 +259,7 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
               )}
               <button
                 onClick={onClose}
-                className="mt-2 block w-full rounded-full bg-gold py-2 font-medium text-bg"
+                className="mt-2 block w-full rounded-xl bg-gold py-2.5 font-black text-bg"
               >
                 返回
               </button>

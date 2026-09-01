@@ -1,6 +1,30 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Sora:wght@500;700&family=Syne:wght@700;800&display=swap");
 
-:root {
+:root,
+html[data-theme="light"] {
+  --bg: #f3eee4;
+  --surface: #fffdf8;
+  --ink: #1c140c;
+  --muted: #5e5348;
+  --gold: #8a5710;
+  --gold-soft: rgba(138, 87, 16, 0.12);
+  --pink: #c43d6a;
+  --mint: #1a7a62;
+  --line: rgba(28, 20, 12, 0.14);
+  --field: #ffffff;
+  --overlay: rgba(243, 238, 228, 0.86);
+  --glow-a: rgba(196, 61, 106, 0.1);
+  --glow-b: rgba(26, 122, 98, 0.08);
+  --glow-c: rgba(138, 87, 16, 0.08);
+  --glass: rgba(255, 253, 248, 0.88);
+  --shadow: rgba(28, 20, 12, 0.08);
+  --placeholder: #8a7d70;
+  --font-serif-tc: "Noto Sans TC", "Sora", ui-sans-serif, sans-serif;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
   --bg: #07050d;
   --surface: #14111c;
   --ink: #f8f4ff;
@@ -12,7 +36,13 @@
   --line: rgba(255, 255, 255, 0.1);
   --field: #1c1828;
   --overlay: rgba(5, 3, 10, 0.72);
-  --font-serif-tc: "Noto Sans TC", "Sora", ui-sans-serif, sans-serif;
+  --glow-a: rgba(255, 61, 138, 0.28);
+  --glow-b: rgba(61, 255, 232, 0.16);
+  --glow-c: rgba(214, 255, 58, 0.1);
+  --glass: rgba(20, 17, 28, 0.82);
+  --shadow: rgba(0, 0, 0, 0.28);
+  --placeholder: #8a829c;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -31,10 +61,6 @@
   --font-display: "Syne", "Noto Sans TC", sans-serif;
 }
 
-html {
-  color-scheme: dark;
-}
-
 html,
 body {
   background: var(--bg);
@@ -45,14 +71,14 @@ body {
   font-family: var(--font-sans);
   min-height: 100vh;
   background-image:
-    radial-gradient(900px 480px at 0% -10%, rgba(255, 61, 138, 0.28), transparent 52%),
-    radial-gradient(800px 420px at 100% 0%, rgba(61, 255, 232, 0.16), transparent 48%),
-    radial-gradient(700px 380px at 70% 110%, rgba(214, 255, 58, 0.1), transparent 50%);
+    radial-gradient(900px 480px at 0% -10%, var(--glow-a), transparent 52%),
+    radial-gradient(800px 420px at 100% 0%, var(--glow-b), transparent 48%),
+    radial-gradient(700px 380px at 70% 110%, var(--glow-c), transparent 50%);
 }
 
 ::selection {
-  background: var(--pink);
-  color: #fff;
+  background: var(--gold);
+  color: var(--bg);
 }
 
 * {
@@ -85,9 +111,9 @@ option {
 }
 
 .glass {
-  background: rgba(20, 17, 28, 0.82);
+  background: var(--glass);
   border: 1px solid var(--line);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 18px 50px var(--shadow);
   backdrop-filter: blur(16px);
 }
 
@@ -97,14 +123,14 @@ option {
 
 .card-pop:hover {
   transform: translateY(-4px);
-  border-color: rgba(214, 255, 58, 0.45);
-  box-shadow: 0 16px 40px rgba(255, 61, 138, 0.16);
+  border-color: color-mix(in srgb, var(--gold) 45%, transparent);
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--pink) 16%, transparent);
 }
 
 .neon-ring {
   box-shadow:
-    0 0 0 1px rgba(255, 61, 138, 0.55),
-    0 0 28px rgba(255, 61, 138, 0.22);
+    0 0 0 1px color-mix(in srgb, var(--pink) 55%, transparent),
+    0 0 28px color-mix(in srgb, var(--pink) 22%, transparent);
 }
 
 .display {
@@ -118,19 +144,19 @@ option {
   height: 8px;
   border-radius: 99px;
   background: var(--pink);
-  box-shadow: 0 0 0 0 rgba(255, 61, 138, 0.7);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--pink) 70%, transparent);
   animation: pulse-dot 1.6s ease-out infinite;
 }
 
 @keyframes pulse-dot {
   0% {
-    box-shadow: 0 0 0 0 rgba(255, 61, 138, 0.7);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--pink) 70%, transparent);
   }
   70% {
-    box-shadow: 0 0 0 8px rgba(255, 61, 138, 0);
+    box-shadow: 0 0 0 8px transparent;
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 61, 138, 0);
+    box-shadow: 0 0 0 0 transparent;
   }
 }
 
@@ -177,7 +203,7 @@ option {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
   border-radius: 99px;
 }
 
@@ -203,7 +229,7 @@ textarea:focus-visible {
 }
 
 ::placeholder {
-  color: #8a829c;
+  color: var(--placeholder);
   opacity: 1;
 }
 

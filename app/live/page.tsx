@@ -65,18 +65,23 @@ function LiveInner() {
     google,
     requestGeo,
     enableDropAlerts,
+    catalogRev,
   } = useStore();
   const searchParams = useSearchParams();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState("陳奕迅演唱會之後食飯");
   const [selectedEventId, setSelectedEventId] = useState("eason-fear");
   const [booking, setBooking] = useState<{ restaurantId: string; eventId?: string } | null>(
     null,
   );
   const [emailOpen, setEmailOpen] = useState(false);
   const [weekAnchor, setWeekAnchor] = useState("2026-09-07T00:00:00+08:00");
+  const [asking, setAsking] = useState(false);
   const deepLinked = useRef(false);
 
-  const selected = eventById(selectedEventId) ?? EVENTS[0];
+  const selected = useMemo(
+    () => eventById(selectedEventId) ?? EVENTS[0],
+    [selectedEventId, catalogRev],
+  );
   const recs = recommendRestaurants(selected, prefs, bookings, 3, inventory);
   const plan = buildNightPlan(selected, calendar, prefs, coords);
   const alreadyIn = calendar.some((c) => c.eventId === selected.id);
@@ -102,7 +107,7 @@ function LiveInner() {
 
   const feedEvents = useMemo(
     () => EVENTS.filter((e) => feeds.includes(e.feedId)),
-    [feeds],
+    [feeds, catalogRev],
   );
 
   function jumpToEvent(event: LocalEvent) {
@@ -110,12 +115,25 @@ function LiveInner() {
     setWeekAnchor(event.startAt);
   }
 
-  function onAsk(e: FormEvent) {
+  async function onAsk(e: FormEvent) {
     e.preventDefault();
     const text = query.trim();
-    if (!text) return;
+    if (!text || asking) return;
     pushMessage({ id: `u-${Date.now()}`, role: "user", text });
-    const reply = agentReply(text, calendar, prefs, bookings);
+    setAsking(true);
+    setQuery("");
+    let reply = agentReply(text, calendar, prefs, bookings);
+    try {
+      const res = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: text, calendar, prefs, bookings }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: typeof reply };
+      if (res.ok && data.message) reply = data.message;
+    } catch {
+      /* keyword fallback already set */
+    }
     pushMessage(reply);
     if (reply.eventIds?.[0]) {
       const ev = eventById(reply.eventIds[0]);
@@ -129,7 +147,7 @@ function LiveInner() {
       click(reply.restaurantIds[0]);
       setBooking({ restaurantId: reply.restaurantIds[0], eventId: reply.eventIds?.[0] });
     }
-    setQuery("");
+    setAsking(false);
   }
 
   function handlePin(event: LocalEvent) {
@@ -237,8 +255,10 @@ function LiveInner() {
                 <button
                   key={s}
                   type="button"
-                  onClick={() => setQuery(s)}
-                  className="rounded-full border border-line px-2 py-1 text-[11px] text-muted hover:text-ink"
+                  onClick={() => {
+                    setQuery(s);
+                  }}
+                  className="rounded-full border border-pink/30 bg-pink/5 px-2.5 py-1 text-[11px] font-medium text-muted hover:border-gold hover:text-gold"
                 >
                   {s}
                 </button>
@@ -248,13 +268,14 @@ function LiveInner() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="flex-1 rounded-full border border-line bg-field px-4 py-2 text-sm"
+                className="flex-1 rounded-xl border border-line bg-field px-4 py-2 text-sm"
                 placeholder="陳奕迅演唱會之後食飯"
                 aria-label="問 Agent"
               />
               <button
                 type="submit"
-                className="grid h-10 w-10 place-items-center rounded-full bg-gold text-bg"
+                disabled={asking}
+                className="grid h-10 w-10 place-items-center rounded-xl bg-gold text-bg disabled:opacity-40"
                 aria-label="傳送"
               >
                 <Send size={16} />

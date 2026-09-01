@@ -11,10 +11,11 @@ import {
 } from "react";
 import { calendarDescription } from "./agent";
 import { itemFromEvent, seedCalendar } from "./calendar";
-import { EVENTS, RESTAURANTS } from "./data";
+import { applyCatalog, EVENTS, RESTAURANTS } from "./data";
 import { parseIcs } from "./icsParse";
 import { DEFAULT_PROFILE } from "./labels";
 import { recommendRestaurants, seatsRemaining } from "./rank";
+import { createSyncKey, isSyncKey } from "./syncKey";
 import { confirmationCode } from "./whatsapp";
 import type {
   Booking,
@@ -23,6 +24,7 @@ import type {
   FeedId,
   MerchantLead,
   MerchantStat,
+  SyncPayload,
   ToastItem,
   UserPrefs,
   UserProfile,
@@ -53,6 +55,7 @@ interface StoreValue {
   inventory: Record<string, number>;
   coords: { lat: number; lng: number } | null;
   google: { configured: boolean; connected: boolean };
+  catalogRev: number;
   toggleFeed: (id: FeedId) => void;
   pinEvent: (eventId: string, opts?: { withRelated?: boolean }) => CalendarItem | null;
   setPrefs: (patch: Partial<UserPrefs>) => void;
@@ -73,6 +76,8 @@ interface StoreValue {
   notify: (text: string) => void;
   dismissToast: (id: string) => void;
   addLead: (lead: Omit<MerchantLead, "id" | "createdAt">) => Promise<void>;
+  pushSync: () => Promise<boolean>;
+  restoreSync: (key: string) => Promise<boolean>;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -112,6 +117,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [inventory, setInventory] = useState<Record<string, number>>({});
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [google, setGoogle] = useState({ configured: false, connected: false });
+  const [catalogRev, setCatalogRev] = useState(0);
   const dropNotified = useRef(new Set<string>());
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -141,6 +147,22 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
     setReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    void fetch("/api/catalog")
+      .then((r) => r.json())
+      .then((d: { catalog?: { venues?: typeof EVENTS; events?: typeof EVENTS; restaurants?: typeof RESTAURANTS } }) => {
+        if (d.catalog) applyCatalog(d.catalog as Parameters<typeof applyCatalog>[0]);
+        setCatalogRev((n) => n + 1);
+      })
+      .catch(() => setCatalogRev((n) => n + 1));
+  }, [ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    setProfile((prev) => (prev.syncKey ? prev : { ...prev, syncKey: createSyncKey() }));
+  }, [ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -479,6 +501,73 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [notify],
   );
 
+  const syncPayload = useCallback((): SyncPayload => {
+    return {
+      feeds,
+      calendar,
+      bookings,
+      impressions,
+      clicks,
+      profile,
+      coords,
+    };
+  }, [feeds, calendar, bookings, impressions, clicks, profile, coords]);
+
+  const pushSync = useCallback(async () => {
+    const key = profile.syncKey;
+    if (!key || !isSyncKey(key)) return false;
+    try {
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, payload: syncPayload() }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }, [profile.syncKey, syncPayload]);
+
+  const restoreSync = useCallback(
+    async (key: string) => {
+      const normalized = key.trim().toUpperCase();
+      if (!isSyncKey(normalized)) {
+        notify("同步碼格式無效");
+        return false;
+      }
+      try {
+        const res = await fetch(`/api/sync?key=${encodeURIComponent(normalized)}`);
+        const data = (await res.json()) as { ok?: boolean; error?: string; payload?: SyncPayload };
+        if (!res.ok || !data.ok || !data.payload) {
+          notify(data.error ?? "找不到同步資料");
+          return false;
+        }
+        const p = data.payload;
+        setFeeds(p.feeds?.length ? p.feeds : DEFAULT_FEEDS);
+        setCalendar(p.calendar ?? []);
+        setBookings(p.bookings ?? []);
+        setImpressions(p.impressions ?? {});
+        setClicks(p.clicks ?? {});
+        setProfile({ ...p.profile, syncKey: normalized });
+        if (p.coords) setCoords(p.coords);
+        notify("已用同步碼還原此裝置");
+        return true;
+      } catch {
+        notify("同步失敗");
+        return false;
+      }
+    },
+    [notify],
+  );
+
+  useEffect(() => {
+    if (!ready || !profile.syncKey) return;
+    const t = window.setTimeout(() => {
+      void pushSync();
+    }, 2800);
+    return () => window.clearTimeout(t);
+  }, [ready, profile.syncKey, pushSync]);
+
   const stats = useMemo<MerchantStat[]>(() => {
     return RESTAURANTS.map((r) => {
       const bks = bookings.filter((b) => b.restaurantId === r.id && b.status !== "cancelled");
@@ -488,11 +577,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         impressions: imps,
         clicks: clicks[r.id] ?? 0,
         bookings: bks.length,
-        spend: bks.filter((b) => b.status === "confirmed").length * r.advertiserCpa,
+        spend: bks.filter((b) => b.status === "attended").length * r.advertiserCpa,
         conversion: imps ? bks.length / imps : 0,
       };
     }).sort((a, b) => b.spend - a.spend || b.impressions - a.impressions);
-  }, [bookings, clicks, impressions]);
+  }, [bookings, clicks, impressions, catalogRev]);
 
   const pushMessage = useCallback((msg: ChatMessage) => {
     setMessages((prev) => [...prev, msg]);
@@ -511,6 +600,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       inventory,
       coords,
       google,
+      catalogRev,
       toggleFeed,
       pinEvent,
       setPrefs,
@@ -529,6 +619,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       notify,
       dismissToast,
       addLead,
+      pushSync,
+      restoreSync,
     }),
     [
       ready,
@@ -541,6 +633,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       inventory,
       coords,
       google,
+      catalogRev,
       toggleFeed,
       pinEvent,
       setPrefs,
@@ -559,6 +652,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       notify,
       dismissToast,
       addLead,
+      pushSync,
+      restoreSync,
     ],
   );
 

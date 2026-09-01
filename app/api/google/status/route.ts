@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { googleConfigured } from "@/lib/google";
-import { cookies } from "next/headers";
+import { googleConnected } from "@/lib/server/googleSession";
+
+export const runtime = "nodejs";
 
 export async function GET() {
-  const jar = await cookies();
-  const connected = Boolean(jar.get("ht_google")?.value);
-  return NextResponse.json({ configured: googleConfigured(), connected });
+  return NextResponse.json({
+    configured: googleConfigured(),
+    connected: await googleConnected(),
+  });
 }

@@ -27,18 +27,16 @@ export function RestaurantCard({
 
   return (
     <article
-      className={`rounded-2xl border border-line bg-surface p-4 shadow-sm ${
+      className={`card-pop rounded-2xl border border-line bg-surface p-4 ${
         restaurant.sponsored ? "neon-ring" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs text-mint">
+          <p className="text-xs font-bold text-mint">
             {restaurant.sponsored ? "合作標籤 · 唔買排名" : "有機空位"} · 步行 {restaurant.walkMinutes} 分鐘
           </p>
-          <h4 className="mt-1 font-[family-name:var(--font-serif-tc)] text-lg">
-            {restaurant.name}
-          </h4>
+          <h4 className="display mt-1 text-lg">{restaurant.name}</h4>
           <p className="text-sm text-muted">
             {restaurant.cuisine} · {restaurant.district} · {PRICE_LABEL[restaurant.priceLevel]}
           </p>

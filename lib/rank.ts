@@ -5,6 +5,7 @@ import {
   commuteMinutes,
   commuteMinutesFromCoords,
   commuteNote,
+  lastTrainForVenue,
   lastTrainRisk,
   minutesOfDay,
   walkMinutesBetween,
@@ -68,7 +69,9 @@ export function recommendRestaurants(
         ? walkMinutesBetween({ lat: venue.lat, lng: venue.lng }, restaurantCoords(r))
         : (mapped ?? 15);
     const remaining = seatsRemaining(r.id, bookings, inventory);
-    const risk = venue ? lastTrainRisk(event.endAt, walkMinutes, venue.lastTrain) : "safe";
+    const risk = venue
+      ? lastTrainRisk(event.endAt, walkMinutes, lastTrainForVenue(venue))
+      : "safe";
     const reasons: string[] = [];
     let score = 40;
 
@@ -193,7 +196,7 @@ export function buildNightPlan(
         : event.venueId === "home"
           ? "開波前入座，賽事期間不用換枱。"
           : `散場後 ${diningStart}–${diningEnd} 入座窗`,
-    lastTrain: venue ? `${venue.mtr} 尾班車 ${venue.lastTrain}` : "—",
+    lastTrain: venue ? `${venue.mtr} 尾班車 ${lastTrainForVenue(venue)}` : "—",
     clash: conflictNote(event, calendar, prefs, coords),
     relatedDrop,
   };

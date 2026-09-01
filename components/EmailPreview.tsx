@@ -33,7 +33,7 @@ export function EmailPreview({
             <X size={18} />
           </button>
         </div>
-        <h3 className="mt-3 font-[family-name:var(--font-serif-tc)] text-xl">{copy.subject}</h3>
+        <h3 className="mt-3 display text-xl">{copy.subject}</h3>
         <pre className="mt-4 max-h-80 overflow-auto whitespace-pre-wrap rounded-2xl bg-field p-4 text-sm leading-6 text-muted">
           {copy.body}
         </pre>

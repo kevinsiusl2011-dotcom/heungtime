@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { RESTAURANTS, restaurantById } from "@/lib/data";
 import { useStore } from "@/lib/store";
+import type { Booking, CpaEntry } from "@/lib/types";
 
 export default function MerchantsPage() {
   const { stats, bookings, addLead } = useStore();
@@ -40,22 +41,25 @@ export default function MerchantsPage() {
     <AppShell>
       <main id="main" className="mx-auto max-w-6xl px-5 py-10">
         <p className="text-xs uppercase tracking-[0.2em] text-gold">B2B · 散場廣告位</p>
-        <h1 className="mt-2 font-[family-name:var(--font-serif-tc)] text-4xl">
+        <h1 className="mt-2 display text-4xl">
           免費流量，變成入座
         </h1>
         <p className="mt-4 max-w-2xl leading-7 text-muted">
           用戶把活動寫進日曆時，意圖已經鎖定：時間、地點、人數、要食。
           享時把這意圖賣給步行圈內的餐廳——按確認入座收 CPA，不是按曝光。C 端永遠免費。
           排序以步行、空位、口味與尾班車為主，合作標籤可見，但不買斷頭位。
+          曝光數字來自此瀏覽器；實際 CPA 以商戶 PIN 後台核銷入座為準。
         </p>
+
+        <MerchantDesk />
 
         <div className="mt-8 grid gap-4 md:grid-cols-4">
           <Stat label="意圖曝光" value={String(totalImpressions)} hint="寫入日曆／Agent 推薦" />
-          <Stat label="已確認訂座" value={String(totalBookings)} hint="即時留位確認" />
+          <Stat label="已確認訂座" value={String(totalBookings)} hint="本機確認／即時留位" />
           <Stat
             label="廣告費"
             value={`HK$${totalSpend.toLocaleString()}`}
-            hint="CPA × 確認入座"
+            hint="CPA × 已入座（核銷）"
           />
           <Stat
             label="平均轉化"
@@ -122,7 +126,7 @@ export default function MerchantsPage() {
 
         <section className="mt-10 grid gap-8 md:grid-cols-2">
           <article className="glass rounded-3xl p-6">
-            <h2 className="font-[family-name:var(--font-serif-tc)] text-2xl">申請合作</h2>
+            <h2 className="display text-2xl">申請合作</h2>
             <p className="mt-2 text-sm text-muted">留下聯絡，我們以 WhatsApp 確認步行圈與空位 API。</p>
             <form onSubmit={onApply} className="mt-4 space-y-3">
               <input
@@ -159,13 +163,13 @@ export default function MerchantsPage() {
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />
-              <button type="submit" className="w-full rounded-full bg-gold py-3 text-sm font-medium text-bg">
+              <button type="submit" className="w-full rounded-xl bg-gold py-3 text-sm font-black text-bg">
                 提交申請
               </button>
             </form>
           </article>
           <article className="rounded-3xl bg-gold/10 p-6">
-            <h2 className="font-[family-name:var(--font-serif-tc)] text-2xl">計費原則</h2>
+            <h2 className="display text-2xl">計費原則</h2>
             <ul className="mt-4 space-y-2 text-sm leading-6 text-muted">
               <li>只為「確認入座」付費，待確認狀態不收費。</li>
               <li>合作餐廳只多 1 分排序權重，不能買斷第一位。</li>
@@ -179,11 +183,166 @@ export default function MerchantsPage() {
   );
 }
 
+function MerchantDesk() {
+  const [restaurantId, setRestaurantId] = useState(RESTAURANTS[0]?.id ?? "");
+  const [pin, setPin] = useState("");
+  const [name, setName] = useState("");
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [ledger, setLedger] = useState<CpaEntry[]>([]);
+  const [billed, setBilled] = useState(0);
+  const [error, setError] = useState("");
+
+  async function refresh() {
+    const res = await fetch("/api/merchant/dashboard");
+    if (res.status === 401) {
+      setName("");
+      return;
+    }
+    const data = (await res.json()) as {
+      ok?: boolean;
+      name?: string;
+      bookings?: Booking[];
+      ledger?: CpaEntry[];
+      billed?: number;
+    };
+    if (data.ok) {
+      setName(data.name ?? "");
+      setBookings(data.bookings ?? []);
+      setLedger(data.ledger ?? []);
+      setBilled(data.billed ?? 0);
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  async function onLogin(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    const res = await fetch("/api/merchant/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restaurantId, pin }),
+    });
+    const data = (await res.json()) as { ok?: boolean; error?: string; name?: string };
+    if (!res.ok || !data.ok) {
+      setError(data.error ?? "登入失敗");
+      return;
+    }
+    setPin("");
+    await refresh();
+  }
+
+  async function mark(code: string, status: "confirmed" | "attended") {
+    await fetch("/api/book/attend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmationCode: code, status }),
+    });
+    await refresh();
+  }
+
+  return (
+    <section className="mt-10 rounded-3xl border border-line p-6">
+      <h2 className="display text-2xl">商戶核銷後台</h2>
+      <p className="mt-2 text-sm text-muted">
+        用餐廳 PIN 登入後可確認訂座、標記入座。未設定 MERCHANT_PINS 時試用 PIN 為 4821。
+      </p>
+      {!name ? (
+        <form onSubmit={onLogin} className="mt-4 grid gap-3 md:grid-cols-[2fr_1fr_auto]">
+          <select
+            className="rounded-xl border border-line bg-field px-3 py-2 text-sm"
+            value={restaurantId}
+            onChange={(e) => setRestaurantId(e.target.value)}
+          >
+            {RESTAURANTS.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+          <input
+            className="rounded-xl border border-line bg-field px-3 py-2 text-sm"
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            placeholder="PIN"
+            inputMode="numeric"
+          />
+          <button className="rounded-xl bg-gold px-4 py-2 text-sm font-black text-bg">登入</button>
+          {error && <p className="text-sm text-pink md:col-span-3">{error}</p>}
+        </form>
+      ) : (
+        <div className="mt-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="font-bold">{name}</p>
+            <p className="text-sm text-gold">已入座 CPA HK${billed.toLocaleString()}</p>
+            <button
+              className="rounded-full border border-line px-3 py-1 text-sm"
+              onClick={() => void fetch("/api/merchant/login", { method: "DELETE" }).then(() => setName(""))}
+            >
+              登出
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-left text-sm">
+              <thead>
+                <tr className="text-muted">
+                  <th className="py-2">編號</th>
+                  <th>客人</th>
+                  <th>時段</th>
+                  <th>狀態</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {bookings.map((b) => (
+                  <tr key={b.id} className="border-t border-line">
+                    <td className="py-2 text-gold">{b.confirmationCode}</td>
+                    <td>
+                      {b.guestName} · {b.partySize} 位
+                    </td>
+                    <td>{b.slot}</td>
+                    <td>{b.status}</td>
+                    <td className="py-2">
+                      {b.status !== "cancelled" && b.status !== "attended" && (
+                        <div className="flex gap-2">
+                          {b.status === "pending" && (
+                            <button
+                              className="rounded-full border border-line px-3 py-1"
+                              onClick={() => void mark(b.confirmationCode, "confirmed")}
+                            >
+                              確認
+                            </button>
+                          )}
+                          <button
+                            className="rounded-full bg-mint px-3 py-1 text-bg"
+                            onClick={() => void mark(b.confirmationCode, "attended")}
+                          >
+                            入座
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {ledger.length > 0 && (
+            <p className="text-xs text-muted">{ledger.length} 筆已入帳</p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function Stat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <article className="glass rounded-3xl p-5">
       <p className="text-xs text-muted">{label}</p>
-      <p className="mt-2 font-[family-name:var(--font-display)] text-4xl text-gold">{value}</p>
+      <p className="display mt-2 text-4xl text-gold">{value}</p>
       <p className="mt-1 text-xs text-muted">{hint}</p>
     </article>
   );
@@ -192,7 +351,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint: stri
 function Package({ title, body, price }: { title: string; body: string; price: string }) {
   return (
     <article className="rounded-3xl border border-line p-6">
-      <h3 className="font-[family-name:var(--font-serif-tc)] text-xl">{title}</h3>
+      <h3 className="display text-xl">{title}</h3>
       <p className="mt-2 text-sm leading-6 text-muted">{body}</p>
       <p className="mt-4 text-sm text-gold">{price}</p>
     </article>

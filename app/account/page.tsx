@@ -21,8 +21,18 @@ export default function AccountPage() {
 }
 
 function AccountInner() {
-  const { ready, profile, updateProfile, notify, google, coords, requestGeo, enableDropAlerts } =
-    useStore();
+  const {
+    ready,
+    profile,
+    updateProfile,
+    notify,
+    google,
+    coords,
+    requestGeo,
+    enableDropAlerts,
+    pushSync,
+    restoreSync,
+  } = useStore();
   const searchParams = useSearchParams();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -32,6 +42,7 @@ function AccountInner() {
   const [homeDistrict, setHomeDistrict] = useState("中環");
   const [needLastTrain, setNeedLastTrain] = useState(true);
   const [cuisines, setCuisines] = useState<string[]>([]);
+  const [restoreKey, setRestoreKey] = useState("");
 
   useEffect(() => {
     if (!ready) return;
@@ -68,9 +79,9 @@ function AccountInner() {
   return (
     <main id="main" className="mx-auto max-w-xl px-5 py-10">
       <p className="text-xs uppercase tracking-[0.2em] text-gold">帳戶</p>
-      <h1 className="mt-2 font-[family-name:var(--font-serif-tc)] text-4xl">你的夜歸設定</h1>
+      <h1 className="mt-2 display text-4xl">你的夜歸設定</h1>
       <p className="mt-3 text-sm text-muted">
-        偏好存在此瀏覽器。訂座席位在伺服器扣減，避免兩人同時搶同一枱。
+        偏好存在此瀏覽器，並可用同步碼備份到伺服器。訂座席位在伺服器扣減，避免兩人同時搶同一枱。
       </p>
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
         <label className="block text-sm">
@@ -180,7 +191,7 @@ function AccountInner() {
       </form>
 
       <section className="mt-10 space-y-3 rounded-3xl border border-line p-5">
-        <h2 className="font-[family-name:var(--font-serif-tc)] text-xl">日曆與提醒</h2>
+        <h2 className="display text-xl">日曆與提醒</h2>
         <IcsImport />
         <button
           type="button"
@@ -196,6 +207,51 @@ function AccountInner() {
         ) : (
           <p className="text-xs text-muted">未設定 GOOGLE_CLIENT_ID。可先用 ICS 訂閱，見 .env.example。</p>
         )}
+      </section>
+
+      <section className="mt-6 space-y-3 rounded-3xl border border-line p-5">
+        <h2 className="display text-xl">多裝置同步碼</h2>
+        <p className="text-sm text-muted">
+          持有此碼即可在另一部裝置還原日曆與偏好。請只傳給自己。
+        </p>
+        <p className="rounded-xl bg-gold-soft px-3 py-2 font-mono text-sm">{profile.syncKey || "產生中…"}</p>
+        <button
+          type="button"
+          onClick={() => {
+            if (!profile.syncKey) return;
+            void navigator.clipboard.writeText(profile.syncKey).then(
+              () => notify("已複製同步碼"),
+              () => notify("請手動複製同步碼"),
+            );
+          }}
+          className="w-full rounded-full border border-line py-2 text-sm"
+        >
+          複製同步碼
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            void pushSync().then((ok) => notify(ok ? "已備份到伺服器" : "備份失敗"))
+          }
+          className="w-full rounded-full border border-line py-2 text-sm"
+        >
+          立即備份
+        </button>
+        <div className="flex gap-2">
+          <input
+            className={fieldClass + " mt-0"}
+            value={restoreKey}
+            onChange={(e) => setRestoreKey(e.target.value)}
+            placeholder="HTS-XXXX-XXXX"
+          />
+          <button
+            type="button"
+            onClick={() => void restoreSync(restoreKey)}
+            className="rounded-xl bg-gold px-4 py-2 text-sm font-black text-bg"
+          >
+            還原
+          </button>
+        </div>
       </section>
     </main>
   );

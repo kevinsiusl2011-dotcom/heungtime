@@ -1,8 +1,11 @@
+import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { NextRequest, NextResponse } from "next/server";
+import { persistGoogleTokens } from "@/lib/server/googleSession";
 import { exchangeCode, googleConfigured } from "@/lib/google";
 
-export async function GET(req: NextRequest) {
+export const runtime = "nodejs";
+
+export async function GET(req: Request) {
   const origin = new URL(req.url).origin;
   if (!googleConfigured()) {
     return NextResponse.redirect(`${origin}/account?google=missing`);
@@ -17,12 +20,7 @@ export async function GET(req: NextRequest) {
   }
   try {
     const tokens = await exchangeCode(code);
-    jar.set("ht_google", JSON.stringify({ access: tokens.access_token, exp: Date.now() + tokens.expires_in * 1000 }), {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: tokens.expires_in,
-    });
+    await persistGoogleTokens(tokens);
     jar.delete("ht_oauth_state");
     return NextResponse.redirect(`${origin}/account?google=ok`);
   } catch {
