@@ -22,7 +22,6 @@ export async function POST(req: Request) {
       partySize?: number;
       slot?: string;
       date?: string;
-      status?: "pending" | "confirmed";
       guestName?: string;
       guestPhone?: string;
     };
@@ -31,8 +30,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "找不到餐廳" }, { status: 404 });
     }
     const partySize = Number(body.partySize);
-    if (!Number.isFinite(partySize) || partySize < 1) {
+    if (!Number.isInteger(partySize) || partySize < 1 || partySize > 12) {
       return NextResponse.json({ ok: false, error: "人數無效" }, { status: 400 });
+    }
+    if (restaurant.partySizes.length && !restaurant.partySizes.includes(partySize)) {
+      return NextResponse.json({ ok: false, error: "此餐廳不接受該人數" }, { status: 400 });
+    }
+    const slot = body.slot ?? restaurant.availableSlots[0];
+    if (!slot || !restaurant.availableSlots.includes(slot)) {
+      return NextResponse.json({ ok: false, error: "此時段沒有空位" }, { status: 400 });
+    }
+    if (body.eventId && !eventById(body.eventId)) {
+      return NextResponse.json({ ok: false, error: "找不到活動" }, { status: 404 });
     }
     const phone = (body.guestPhone ?? "").replace(/\D/g, "");
     if (phone.length < 8) {
@@ -42,9 +51,9 @@ export async function POST(req: Request) {
       restaurantId: restaurant.id,
       eventId: body.eventId,
       partySize,
-      slot: body.slot ?? restaurant.availableSlots[0],
+      slot,
       date: body.date ?? new Date().toISOString(),
-      status: restaurant.autoChatReady ? "confirmed" : (body.status ?? "pending"),
+      status: restaurant.autoChatReady ? "confirmed" : "pending",
       guestName: (body.guestName ?? "").trim() || "客人",
       guestPhone: phone,
     });

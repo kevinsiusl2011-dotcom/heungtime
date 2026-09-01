@@ -48,21 +48,39 @@ export const LAST_TRAIN_BY_STATION: Record<string, string> = {
   會展: "00:58",
   亞博: "00:48",
   戲曲中心: "00:50",
+  黃埔: "00:48",
+  尖東: "00:40",
+  香港: "01:00",
 };
 
 export function normalizeStation(name: string) {
-  return name.replace(/站$/, "").replace(/／.*/, "").replace(/\/.*/, "").trim();
+  const first = (name.split(/[／/]/)[0] ?? name).trim();
+  return first.replace(/站$/, "").trim();
+}
+
+function stationKeys(name: string) {
+  return name
+    .split(/[／/]/)
+    .map((part) => part.replace(/站$/, "").trim())
+    .filter(Boolean);
 }
 
 export function lastTrainForStation(station: string) {
-  const key = normalizeStation(station);
-  return LAST_TRAIN_BY_STATION[key] ?? LAST_TRAIN_BY_STATION[station] ?? "00:30";
+  for (const key of stationKeys(station)) {
+    if (LAST_TRAIN_BY_STATION[key]) return LAST_TRAIN_BY_STATION[key];
+  }
 }
 
 export function lastTrainForVenue(venue: { mtr: string; lastTrain: string }) {
-  const key = normalizeStation(venue.mtr);
-  if (LAST_TRAIN_BY_STATION[key]) return LAST_TRAIN_BY_STATION[key];
-  return venue.lastTrain || "00:30";
+  for (const key of stationKeys(venue.mtr)) {
+    if (LAST_TRAIN_BY_STATION[key]) return LAST_TRAIN_BY_STATION[key];
+  }
+  return parseClock(venue.lastTrain) != null ? venue.lastTrain : undefined;
+}
+
+export function lastTrainCaption(venue: { mtr: string; lastTrain: string }) {
+  const time = lastTrainForVenue(venue);
+  return time ? `${venue.mtr} 尾班車 ${time}` : `${venue.mtr} 尾班車時間未設定`;
 }
 
 export const DISTRICT_COORDS: Record<string, { lat: number; lng: number }> = {
@@ -104,6 +122,10 @@ export function commuteMinutes(homeDistrict: string, venueId: string): number {
   const venue = venueById(venueId);
   if (!venue) return 35;
   if (venue.id === "home") return 8;
+  const home = DISTRICT_COORDS[homeDistrict];
+  if (home) {
+    return Math.max(8, Math.round(haversineMeters(home, { lat: venue.lat, lng: venue.lng }) / 420 + 8));
+  }
   const fromHome = DISTRICT_TO_MTR[homeDistrict] ?? 18;
   const fromCentral = venue.commuteFromCentralMin;
   return Math.max(8, Math.round(Math.abs(fromCentral - fromHome) + 12));
@@ -130,10 +152,13 @@ export function commuteNote(
   return `由${origin}到${venue.mtr}約 ${mins} 分鐘（港鐵＋步行）。`;
 }
 
-export function parseClock(hhmm: string): number {
-  const match = hhmm.match(/(\d{1,2}):(\d{2})/);
-  if (!match) return 24 * 60 + 30;
-  return Number(match[1]) * 60 + Number(match[2]);
+export function parseClock(hhmm: string): number | null {
+  const match = hhmm.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
 }
 
 export function minutesOfDay(iso: string): number {
@@ -158,11 +183,18 @@ export function clockFromMinutes(total: number): string {
 export function lastTrainRisk(
   eventEndIso: string,
   walkMinutes: number,
-  venueLastTrain: string,
+  venueLastTrain?: string,
 ): "safe" | "tight" | "miss" {
-  const dineAt = minutesOfDay(eventEndIso) + walkMinutes + 5;
-  let last = parseClock(venueLastTrain);
-  if (last < 5 * 60) last += 24 * 60;
+  const lastClock = parseClock(venueLastTrain ?? "");
+  if (lastClock == null) return "miss";
+  const endMin = minutesOfDay(eventEndIso);
+  const dineAt = endMin + walkMinutes + 5;
+  let last = lastClock;
+  const afterMidnight = (mins: number) => mins < 5 * 60;
+  // 凌晨散場、尾班車仍是當晚（例如 23:10）——車已經開咗。
+  if (afterMidnight(endMin) && !afterMidnight(last)) return "miss";
+  // 00:32 等尾班車只有在散場仍是「今晚」時先捲去翌日；凌晨散場唔好兩邊各加 24 小時。
+  if (afterMidnight(last) && !afterMidnight(endMin)) last += 24 * 60;
   const leaveBy = last - 12;
   if (dineAt + 50 > leaveBy) return "miss";
   if (dineAt + 25 > leaveBy) return "tight";

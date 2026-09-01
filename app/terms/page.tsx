@@ -9,7 +9,7 @@ export default function TermsPage() {
         <h1 className="display text-4xl text-ink">使用條款</h1>
         <p className="mt-2 text-sm">最後更新：2026 年 8 月 31 日</p>
         <p className="mt-6">
-          使用享時 HeungTime 即表示你同意以下條款。本服務為香港活動日曆與訂座轉介，C 端免費。
+          使用享時 Ease 即表示你同意以下條款。本服務為香港活動日曆與訂座轉介，C 端免費。
         </p>
         <h2 className="mt-8 text-xl text-ink">服務範圍</h2>
         <p className="mt-3">

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { saveCatalogOverlay } from "@/lib/server/persist";
+import { saveCatalogOverlay, parseCatalogPayload } from "@/lib/server/persist";
 import { adminConfigured, verifySigned } from "@/lib/server/session";
-import type { CatalogPayload } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -17,9 +16,16 @@ export async function PUT(req: Request) {
     return NextResponse.json({ ok: false, error: "未授權" }, { status: 401 });
   }
   try {
-    const body = (await req.json()) as CatalogPayload;
-    const catalog = await saveCatalogOverlay(body);
-    return NextResponse.json({ ok: true, catalog });
+    const catalog = parseCatalogPayload(await req.json());
+    if (!catalog) {
+      return NextResponse.json({ ok: false, error: "目錄格式無效" }, { status: 400 });
+    }
+    const saved = await saveCatalogOverlay(catalog);
+    return NextResponse.json({
+      ok: true,
+      catalog: saved.catalog,
+      skipped: saved.skipped,
+    });
   } catch {
     return NextResponse.json({ ok: false, error: "儲存失敗" }, { status: 500 });
   }

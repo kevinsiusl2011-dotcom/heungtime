@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { restaurantById } from "@/lib/data";
 import { ensurePersist } from "@/lib/server/persist";
-import { merchantPinFor, signValue } from "@/lib/server/session";
+import { merchantPinFor, pinOk, sessionSecret, signValue } from "@/lib/server/session";
 import { clientIp, rateLimit, rateLimitResponse } from "@/lib/server/rateLimit";
 
 export const runtime = "nodejs";
@@ -15,13 +15,20 @@ export async function POST(req: Request) {
       headers: { "Retry-After": String(limited.retryAfter) },
     });
   }
+  if (!sessionSecret()) {
+    return NextResponse.json({ ok: false, error: "尚未設定 SESSION_SECRET" }, { status: 503 });
+  }
   await ensurePersist();
   const body = (await req.json()) as { restaurantId?: string; pin?: string };
   const restaurant = restaurantById(body.restaurantId ?? "");
   if (!restaurant) {
     return NextResponse.json({ ok: false, error: "找不到餐廳" }, { status: 404 });
   }
-  if ((body.pin ?? "").trim() !== merchantPinFor(restaurant.id)) {
+  const expected = merchantPinFor(restaurant.id);
+  if (!expected) {
+    return NextResponse.json({ ok: false, error: "尚未設定此商戶 PIN" }, { status: 503 });
+  }
+  if (!pinOk((body.pin ?? "").trim(), expected)) {
     return NextResponse.json({ ok: false, error: "PIN 不正確" }, { status: 401 });
   }
   const jar = await cookies();

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { restaurantById, venueById } from "@/lib/data";
 import { DISTRICT_COORDS } from "@/lib/geo";
 import { walkingMinutes, mapsConfigured } from "@/lib/maps";
-import { restaurantById, venueById } from "@/lib/data";
+import { restaurantCoords } from "@/lib/rank";
 import { ensurePersist } from "@/lib/server/persist";
 
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
   const dest = destVenue
     ? { lat: destVenue.lat, lng: destVenue.lng }
     : restaurant
-      ? DISTRICT_COORDS[restaurant.district]
+      ? restaurantCoords(restaurant)
       : undefined;
   const origin =
     body.origin ?? (body.district ? DISTRICT_COORDS[body.district] : undefined);

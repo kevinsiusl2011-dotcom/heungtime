@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { llmAgentReply } from "@/lib/llm";
-import { ensurePersist } from "@/lib/server/persist";
+import { ensurePersist, getInventory } from "@/lib/server/persist";
 import { clientIp, rateLimit, rateLimitResponse } from "@/lib/server/rateLimit";
 import type { Booking, CalendarItem, UserPrefs } from "@/lib/types";
 
@@ -16,6 +16,7 @@ export async function POST(req: Request) {
   }
   try {
     await ensurePersist();
+    const inventory = await getInventory();
     const body = (await req.json()) as {
       query?: string;
       calendar?: CalendarItem[];
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
         homeDistrict: "中環",
       },
       body.bookings ?? [],
+      inventory,
     );
     return NextResponse.json({ ok: true, message, llm: Boolean(process.env.OPENAI_API_KEY) });
   } catch {

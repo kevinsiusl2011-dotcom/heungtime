@@ -14,10 +14,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "JSON 無效" }, { status: 400 });
   }
   const code = body.confirmationCode?.trim();
-  const status = body.status === "confirmed" ? "confirmed" : "attended";
   if (!code) {
     return NextResponse.json({ ok: false, error: "缺少確認編號" }, { status: 400 });
   }
+  if (body.status !== "confirmed" && body.status !== "attended") {
+    return NextResponse.json({ ok: false, error: "狀態無效" }, { status: 400 });
+  }
+  const status = body.status;
 
   const jar = await cookies();
   const merchant = verifySigned(jar.get("ht_merchant")?.value);
@@ -43,7 +46,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "找不到訂座" }, { status: 404 });
   }
   if (!result.updated) {
-    return NextResponse.json({ ok: false, error: result.reason, booking: result.booking }, { status: 409 });
+    return NextResponse.json({ ok: false, error: result.reason }, { status: 409 });
   }
   return NextResponse.json({ ok: true, booking: result.booking });
 }

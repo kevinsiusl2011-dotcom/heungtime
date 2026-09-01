@@ -10,22 +10,22 @@ const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://heungtime.hk";
 export const metadata: Metadata = {
   metadataBase: new URL(site),
   title: {
-    default: "享時 HeungTime｜香港活動智能日曆",
-    template: "%s｜享時 HeungTime",
+    default: "享時 Ease｜香港活動智能日曆",
+    template: "%s｜享時 Ease",
   },
   description:
     "把演唱會搶飛、商場限時、演藝展覽與球賽接到你的日曆。散場後按步行、空位與尾班車，經 WhatsApp 一鍵訂座。",
   keywords: ["香港", "日曆", "演唱會", "訂座", "WhatsApp", "搶飛", "港超", "尾班車"],
   openGraph: {
-    title: "享時 HeungTime｜香港活動智能日曆",
+    title: "享時 Ease｜香港活動智能日曆",
     description: "本地即時活動 × 個人日程。散場後一鍵訂座，C 端免費。",
     locale: "zh_HK",
     type: "website",
-    siteName: "享時 HeungTime",
+    siteName: "享時 Ease",
   },
   twitter: {
     card: "summary_large_image",
-    title: "享時 HeungTime",
+    title: "享時 Ease",
     description: "香港活動寫進你的日曆，散場後一鍵訂座。",
   },
   robots: { index: true, follow: true },

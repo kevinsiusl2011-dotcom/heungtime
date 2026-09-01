@@ -32,7 +32,14 @@ export async function googleConnected() {
   const jar = await cookies();
   const sid = jar.get(COOKIE)?.value;
   if (!sid) return false;
-  if (sid.startsWith("{")) return true;
+  if (sid.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(sid) as { access?: string; refresh?: string };
+      return Boolean(parsed.access || parsed.refresh);
+    } catch {
+      return false;
+    }
+  }
   const row = await getOAuth(sid);
   return Boolean(row);
 }

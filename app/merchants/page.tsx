@@ -9,7 +9,7 @@ import type { Booking, CpaEntry } from "@/lib/types";
 export default function MerchantsPage() {
   const { stats, bookings, addLead } = useStore();
   const totalSpend = stats.reduce((s, x) => s + x.spend, 0);
-  const totalBookings = bookings.filter((b) => b.status === "confirmed").length;
+  const totalBookings = bookings.filter((b) => b.status === "confirmed" || b.status === "attended").length;
   const totalImpressions = stats.reduce((s, x) => s + x.impressions, 0);
   const avgConv =
     totalImpressions === 0 ? 0 : stats.reduce((s, x) => s + x.bookings, 0) / totalImpressions;
@@ -184,6 +184,7 @@ export default function MerchantsPage() {
 }
 
 function MerchantDesk() {
+  const { catalogRev } = useStore();
   const [restaurantId, setRestaurantId] = useState(RESTAURANTS[0]?.id ?? "");
   const [pin, setPin] = useState("");
   const [name, setName] = useState("");
@@ -235,11 +236,17 @@ function MerchantDesk() {
   }
 
   async function mark(code: string, status: "confirmed" | "attended") {
-    await fetch("/api/book/attend", {
+    const res = await fetch("/api/book/attend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ confirmationCode: code, status }),
     });
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || !data.ok) {
+      setError(data.error ?? "更新狀態失敗");
+      return;
+    }
+    setError("");
     await refresh();
   }
 
@@ -247,11 +254,12 @@ function MerchantDesk() {
     <section className="mt-10 rounded-3xl border border-line p-6">
       <h2 className="display text-2xl">商戶核銷後台</h2>
       <p className="mt-2 text-sm text-muted">
-        用餐廳 PIN 登入後可確認訂座、標記入座。未設定 MERCHANT_PINS 時試用 PIN 為 4821。
+        用餐廳 PIN 登入後可確認訂座、標記入座。請在伺服器設定 MERCHANT_PINS；本機未設定時試用 PIN 為 4821。
       </p>
       {!name ? (
         <form onSubmit={onLogin} className="mt-4 grid gap-3 md:grid-cols-[2fr_1fr_auto]">
           <select
+            key={catalogRev}
             className="rounded-xl border border-line bg-field px-3 py-2 text-sm"
             value={restaurantId}
             onChange={(e) => setRestaurantId(e.target.value)}

@@ -15,7 +15,7 @@ type Inventory = Record<string, number>;
 
 let chain = Promise.resolve();
 let migrated = false;
-let catalogLoaded = false;
+let lastCatalogRaw: string | null = null;
 
 function locked<T>(fn: () => T | Promise<T>) {
   const run = chain.then(fn, fn);
@@ -53,15 +53,16 @@ function kvSet(key: string, value: string) {
 }
 
 export function loadCatalogOverlay() {
-  if (catalogLoaded) return getCatalog();
-  catalogLoaded = true;
   const raw = kvGet("catalog");
-  if (raw) {
-    try {
-      applyCatalog(JSON.parse(raw) as CatalogPayload);
-    } catch {
-      /* keep seed */
+  if (!raw || raw === lastCatalogRaw) return getCatalog();
+  try {
+    const parsed = parseCatalogPayload(JSON.parse(raw));
+    if (parsed) {
+      applyCatalog(parsed);
+      lastCatalogRaw = raw;
     }
+  } catch {
+    /* keep seed */
   }
   return getCatalog();
 }
@@ -69,10 +70,41 @@ export function loadCatalogOverlay() {
 export async function saveCatalogOverlay(catalog: CatalogPayload) {
   await ready();
   return locked(() => {
-    applyCatalog(catalog);
-    kvSet("catalog", JSON.stringify(getCatalog()));
-    catalogLoaded = true;
-    return getCatalog();
+    const skipped: string[] = [];
+    if (catalog.restaurants?.length) {
+      const merged = catalog.restaurants.flatMap((restaurant) => {
+        const existing = restaurantById(restaurant.id);
+        if (!existing) {
+          if (
+            !Array.isArray(restaurant.availableSlots) ||
+            !restaurant.availableSlots.length ||
+            !Array.isArray(restaurant.partySizes) ||
+            !Array.isArray(restaurant.nearVenueIds)
+          ) {
+            skipped.push(restaurant.id || restaurant.name || "未命名餐廳");
+            return [];
+          }
+          return [restaurant];
+        }
+        return [{ ...existing, ...restaurant, seatsLeft: existing.seatsLeft }];
+      });
+      applyCatalog({ ...catalog, restaurants: merged });
+    } else {
+      applyCatalog(catalog);
+    }
+    if (catalog.inventory) {
+      for (const [id, raw] of Object.entries(catalog.inventory)) {
+        const remaining = Math.max(0, Math.floor(Number(raw)));
+        if (!Number.isFinite(remaining)) continue;
+        writeInventoryRow(id, remaining);
+        const restaurant = restaurantById(id);
+        if (restaurant && remaining > restaurant.seatsLeft) restaurant.seatsLeft = remaining;
+      }
+    }
+    const serialized = JSON.stringify(getCatalog());
+    kvSet("catalog", serialized);
+    lastCatalogRaw = serialized;
+    return { catalog: getCatalog(), skipped };
   });
 }
 
@@ -82,13 +114,14 @@ async function migrateJsonIfNeeded() {
   const db = getDb();
   loadCatalogOverlay();
 
+  let inventoryFromDefaults = false;
   if (rowCount("SELECT COUNT(*) AS c FROM inventory") === 0) {
     const inv = defaultInventory();
     try {
       const raw = await readFile(path.join(DATA_DIR, "inventory.json"), "utf8");
       Object.assign(inv, JSON.parse(raw) as Inventory);
     } catch {
-      /* seed */
+      inventoryFromDefaults = true;
     }
     const stmt = db.prepare(
       "INSERT INTO inventory(restaurant_id, seats) VALUES(?, ?) ON CONFLICT(restaurant_id) DO UPDATE SET seats = excluded.seats",
@@ -105,6 +138,17 @@ async function migrateJsonIfNeeded() {
       );
       for (const b of list) {
         stmt.run(b.id, b.confirmationCode, b.restaurantId, JSON.stringify(b), b.status, b.createdAt);
+      }
+      if (inventoryFromDefaults) {
+        const used: Inventory = {};
+        for (const booking of list) {
+          if (booking.status === "cancelled") continue;
+          used[booking.restaurantId] = (used[booking.restaurantId] ?? 0) + booking.partySize;
+        }
+        const inv = getInventoryUnlocked();
+        for (const [id, qty] of Object.entries(used)) {
+          writeInventoryRow(id, Math.max(0, (inv[id] ?? 0) - qty));
+        }
       }
     } catch {
       /* none */
@@ -157,7 +201,7 @@ export async function reserveSeats(restaurantId: string, partySize: number) {
   return locked(async () => {
     const inv = await getInventoryUnlocked();
     const left = inv[restaurantId] ?? 0;
-    if (partySize < 1 || partySize > 12) return { ok: false as const, error: "人數無效", left };
+    if (!Number.isInteger(partySize) || partySize < 1 || partySize > 12) return { ok: false as const, error: "人數無效", left };
     if (left < partySize) return { ok: false as const, error: "剩餘席位不足", left };
     const next = left - partySize;
     writeInventoryRow(restaurantId, next);
@@ -179,8 +223,7 @@ export async function releaseSeats(restaurantId: string, partySize: number) {
   await ready();
   return locked(() => {
     const inv = getInventoryUnlocked();
-    const cap = restaurantById(restaurantId)?.seatsLeft ?? 0;
-    const next = Math.min(cap, (inv[restaurantId] ?? 0) + partySize);
+    const next = (inv[restaurantId] ?? 0) + partySize;
     writeInventoryRow(restaurantId, next);
     return { ok: true as const, left: next };
   });
@@ -231,19 +274,55 @@ export async function bookingByCode(confirmationCode: string) {
 export async function cancelServerBooking(code: string) {
   await ready();
   return locked(() => {
-    const row = getDb()
-      .prepare("SELECT json FROM bookings WHERE confirmation_code = ?")
-      .get(code) as { json: string } | undefined;
-    if (!row) return { found: false as const };
-    const booking = JSON.parse(row.json) as Booking;
-    if (booking.status === "cancelled") {
-      return { found: true as const, booking, released: false as const };
+    const db = getDb();
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const row = db
+        .prepare("SELECT json FROM bookings WHERE confirmation_code = ?")
+        .get(code) as { json: string } | undefined;
+      if (!row) {
+        db.exec("ROLLBACK");
+        return { found: false as const };
+      }
+      const booking = JSON.parse(row.json) as Booking;
+      if (booking.status === "cancelled") {
+        db.exec("ROLLBACK");
+        return { found: true as const, released: false as const, alreadyCancelled: true as const };
+      }
+      if (booking.status === "attended") {
+        db.exec("ROLLBACK");
+        return { found: true as const, released: false as const, reason: "已入座，不能取消" };
+      }
+      booking.status = "cancelled";
+      const updated = db
+        .prepare(
+          "UPDATE bookings SET json = ?, status = ? WHERE confirmation_code = ? AND status IN ('pending', 'confirmed')",
+        )
+        .run(JSON.stringify(booking), booking.status, code);
+      if (!updated.changes) {
+        const again = db
+          .prepare("SELECT json FROM bookings WHERE confirmation_code = ?")
+          .get(code) as { json: string } | undefined;
+        db.exec("ROLLBACK");
+        const latest = again ? (JSON.parse(again.json) as Booking) : booking;
+        if (latest.status === "attended") {
+          return { found: true as const, released: false as const, reason: "已入座，不能取消" };
+        }
+        return { found: true as const, released: false as const, alreadyCancelled: true as const };
+      }
+      const inv = getInventoryUnlocked();
+      const next = (inv[booking.restaurantId] ?? 0) + booking.partySize;
+      writeInventoryRow(booking.restaurantId, next);
+      db.exec("COMMIT");
+      return { found: true as const, booking, released: true as const, left: next };
+    } catch (err) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+        /* ignore */
+      }
+      throw err;
     }
-    booking.status = "cancelled";
-    getDb()
-      .prepare("UPDATE bookings SET json = ?, status = ? WHERE confirmation_code = ?")
-      .run(JSON.stringify(booking), booking.status, code);
-    return { found: true as const, booking, released: true as const };
   });
 }
 
@@ -253,27 +332,50 @@ export async function updateBookingStatus(
 ) {
   await ready();
   return locked(() => {
-    const row = getDb()
-      .prepare("SELECT json FROM bookings WHERE confirmation_code = ?")
-      .get(code) as { json: string } | undefined;
-    if (!row) return { found: false as const };
-    const booking = JSON.parse(row.json) as Booking;
-    if (booking.status === "cancelled") {
-      return { found: true as const, booking, updated: false as const, reason: "已取消" };
-    }
-    booking.status = status;
-    if (status === "attended") booking.attendedAt = new Date().toISOString();
-    getDb()
-      .prepare("UPDATE bookings SET json = ?, status = ? WHERE confirmation_code = ?")
-      .run(JSON.stringify(booking), booking.status, code);
-    if (status === "attended") {
-      const restaurant = restaurantById(booking.restaurantId);
-      const amount = restaurant?.advertiserCpa ?? 0;
-      getDb()
+    const db = getDb();
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const row = db
+        .prepare("SELECT json FROM bookings WHERE confirmation_code = ?")
+        .get(code) as { json: string } | undefined;
+      if (!row) {
+        db.exec("ROLLBACK");
+        return { found: false as const };
+      }
+      const booking = JSON.parse(row.json) as Booking;
+      if (booking.status === "cancelled") {
+        db.exec("ROLLBACK");
+        return { found: true as const, booking, updated: false as const, reason: "已取消" };
+      }
+      if (status === booking.status) {
+        db.exec("ROLLBACK");
+        return { found: true as const, booking, updated: true as const };
+      }
+      const allowed =
+        (booking.status === "pending" && (status === "confirmed" || status === "attended")) ||
+        (booking.status === "confirmed" && status === "attended");
+      if (!allowed) {
+        db.exec("ROLLBACK");
+        return { found: true as const, booking, updated: false as const, reason: "狀態不能回退" };
+      }
+      const previous = booking.status;
+      booking.status = status;
+      if (status === "attended") booking.attendedAt = new Date().toISOString();
+      const updated = db
         .prepare(
-          "INSERT INTO cpa_ledger(id, booking_id, restaurant_id, amount, status, created_at) VALUES(?, ?, ?, ?, ?, ?) ON CONFLICT(booking_id) DO NOTHING",
+          "UPDATE bookings SET json = ?, status = ? WHERE confirmation_code = ? AND status = ?",
         )
-        .run(
+        .run(JSON.stringify(booking), booking.status, code, previous);
+      if (!updated.changes) {
+        db.exec("ROLLBACK");
+        return { found: true as const, booking, updated: false as const, reason: "狀態不能回退" };
+      }
+      if (status === "attended") {
+        const restaurant = restaurantById(booking.restaurantId);
+        const amount = restaurant?.advertiserCpa ?? 0;
+        db.prepare(
+          "INSERT INTO cpa_ledger(id, booking_id, restaurant_id, amount, status, created_at) VALUES(?, ?, ?, ?, ?, ?) ON CONFLICT(booking_id) DO NOTHING",
+        ).run(
           `cpa-${booking.id}`,
           booking.id,
           booking.restaurantId,
@@ -281,25 +383,87 @@ export async function updateBookingStatus(
           "billed",
           new Date().toISOString(),
         );
+      }
+      db.exec("COMMIT");
+      return { found: true as const, booking, updated: true as const };
+    } catch (err) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+        /* ignore */
+      }
+      throw err;
     }
-    return { found: true as const, booking, updated: true as const };
   });
+}
+
+function isUniqueConstraint(err: unknown) {
+  return /UNIQUE constraint failed/i.test(String(err));
 }
 
 export async function createBookingRecord(
   input: Omit<Booking, "id" | "via" | "confirmationCode" | "createdAt">,
 ) {
-  const reserved = await reserveSeats(input.restaurantId, input.partySize);
-  if (!reserved.ok) return reserved;
-  const booking: Booking = {
-    ...input,
-    id: `bk-${Date.now()}`,
-    via: "autochat",
-    confirmationCode: confirmationCode(),
-    createdAt: new Date().toISOString(),
-  };
-  await saveServerBooking(booking);
-  return { ok: true as const, booking, left: reserved.left };
+  await ready();
+  return locked(() => {
+    const db = getDb();
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const inv = getInventoryUnlocked();
+      const left = inv[input.restaurantId] ?? 0;
+      if (!Number.isInteger(input.partySize) || input.partySize < 1 || input.partySize > 12) {
+        db.exec("ROLLBACK");
+        return { ok: false as const, error: "人數無效", left };
+      }
+      if (left < input.partySize) {
+        db.exec("ROLLBACK");
+        return { ok: false as const, error: "剩餘席位不足", left };
+      }
+
+      let booking: Booking | null = null;
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const candidate: Booking = {
+          ...input,
+          id: crypto.randomUUID(),
+          via: "autochat",
+          confirmationCode: confirmationCode(),
+          createdAt: new Date().toISOString(),
+        };
+        try {
+          db.prepare(
+            "INSERT INTO bookings(id, confirmation_code, restaurant_id, json, status, created_at) VALUES(?, ?, ?, ?, ?, ?)",
+          ).run(
+            candidate.id,
+            candidate.confirmationCode,
+            candidate.restaurantId,
+            JSON.stringify(candidate),
+            candidate.status,
+            candidate.createdAt,
+          );
+          booking = candidate;
+          break;
+        } catch (err) {
+          if (isUniqueConstraint(err) && attempt < 7) continue;
+          throw err;
+        }
+      }
+      if (!booking) {
+        db.exec("ROLLBACK");
+        return { ok: false as const, error: "無法產生確認編號", left };
+      }
+      const next = left - input.partySize;
+      writeInventoryRow(input.restaurantId, next);
+      db.exec("COMMIT");
+      return { ok: true as const, booking, left: next };
+    } catch (err) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+        /* ignore */
+      }
+      throw err;
+    }
+  });
 }
 
 export async function saveLead(lead: MerchantLead) {
@@ -416,6 +580,53 @@ export async function setWalkCache(key: string, minutes: number) {
       )
       .run(key, minutes, new Date().toISOString());
   });
+}
+
+export function parseCatalogPayload(raw: unknown): CatalogPayload | null {
+  if (!raw || typeof raw !== "object") return null;
+  const catalog = raw as CatalogPayload;
+  if (catalog.events) {
+    if (!Array.isArray(catalog.events)) return null;
+    if (
+      catalog.events.some(
+        (event) =>
+          !event?.id ||
+          !event?.title ||
+          !event?.startAt ||
+          !event?.endAt ||
+          !event?.venueId ||
+          Number.isNaN(Date.parse(event.startAt)) ||
+          Number.isNaN(Date.parse(event.endAt)),
+      )
+    ) {
+      return null;
+    }
+  }
+  if (catalog.restaurants) {
+    if (!Array.isArray(catalog.restaurants)) return null;
+    if (
+      catalog.restaurants.some(
+        (restaurant) =>
+          !restaurant?.id ||
+          !restaurant?.name ||
+          !Number.isFinite(Number(restaurant.seatsLeft)) ||
+          Number(restaurant.seatsLeft) < 0,
+      )
+    ) {
+      return null;
+    }
+  }
+  if (catalog.venues) {
+    if (!Array.isArray(catalog.venues)) return null;
+    if (catalog.venues.some((venue) => !venue?.id || !venue?.name)) return null;
+  }
+  if (catalog.inventory) {
+    if (typeof catalog.inventory !== "object" || Array.isArray(catalog.inventory)) return null;
+    for (const value of Object.values(catalog.inventory)) {
+      if (!Number.isFinite(Number(value)) || Number(value) < 0) return null;
+    }
+  }
+  return catalog;
 }
 
 export { confirmationCode };

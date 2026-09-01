@@ -104,18 +104,20 @@ export default function BookingsPage() {
                     )}
                     <button
                       onClick={() =>
-                        downloadText(`heungtime-${b.confirmationCode}.ics`, bookingToIcs(b))
+                        downloadText(`ease-${b.confirmationCode}.ics`, bookingToIcs(b))
                       }
                       className="rounded-full border border-line px-4 py-2 text-sm"
                     >
                       下載 ICS
                     </button>
-                    <button
-                      onClick={() => void cancelBooking(b.confirmationCode)}
-                      className="rounded-full border border-line px-4 py-2 text-sm text-muted"
-                    >
-                      取消訂座
-                    </button>
+                    {b.status !== "attended" && (
+                      <button
+                        onClick={() => void cancelBooking(b.confirmationCode)}
+                        className="rounded-full border border-line px-4 py-2 text-sm text-muted"
+                      >
+                        取消訂座
+                      </button>
+                    )}
                   </div>
                 )}
               </article>

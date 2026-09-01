@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cancelServerBooking, releaseSeats } from "@/lib/server/persist";
+import { cancelServerBooking } from "@/lib/server/persist";
 import { clientIp, rateLimit, rateLimitResponse } from "@/lib/server/rateLimit";
 
 export const runtime = "nodejs";
@@ -22,10 +22,16 @@ export async function DELETE(req: Request) {
     if (!result.found) {
       return NextResponse.json({ ok: false, error: "找不到訂座" }, { status: 404 });
     }
-    if (result.released) {
-      await releaseSeats(result.booking.restaurantId, result.booking.partySize);
+    if ("alreadyCancelled" in result && result.alreadyCancelled) {
+      return NextResponse.json({ ok: true, alreadyCancelled: true });
     }
-    return NextResponse.json({ ok: true, booking: result.booking });
+    if ("reason" in result && result.reason) {
+      return NextResponse.json({ ok: false, error: result.reason }, { status: 409 });
+    }
+    return NextResponse.json({
+      ok: true,
+      seatsRemaining: "left" in result ? result.left : undefined,
+    });
   } catch {
     return NextResponse.json({ ok: false, error: "取消失敗" }, { status: 500 });
   }

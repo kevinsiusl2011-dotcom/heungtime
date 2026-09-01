@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { persistGoogleTokens } from "@/lib/server/googleSession";
 import { exchangeCode, googleConfigured } from "@/lib/google";
+import { verifySigned } from "@/lib/server/session";
 
 export const runtime = "nodejs";
 
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const jar = await cookies();
-  const expected = jar.get("ht_oauth_state")?.value;
+  const expected = verifySigned(jar.get("ht_oauth_state")?.value);
   if (!code || !state || state !== expected) {
     return NextResponse.redirect(`${origin}/account?google=denied`);
   }

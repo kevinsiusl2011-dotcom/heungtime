@@ -5,10 +5,10 @@ import { autoChatScript } from "@/lib/agent";
 import { bookingToIcs, downloadText } from "@/lib/bookingIcs";
 import { formatDate } from "@/lib/calendar";
 import { eventById, restaurantById } from "@/lib/data";
-import { recommendRestaurants } from "@/lib/rank";
+import { recommendRestaurants, seatsRemaining } from "@/lib/rank";
 import { useStore } from "@/lib/store";
 import { bookingMessage, whatsappUrl } from "@/lib/whatsapp";
-import type { Booking } from "@/lib/types";
+import type { Booking, RankedRestaurant } from "@/lib/types";
 import { Modal } from "./Modal";
 
 interface Props {
@@ -21,20 +21,21 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
   const restaurant = restaurantById(restaurantId);
   const event = eventId ? eventById(eventId) : undefined;
   const { addBooking, profile, prefs, bookings, inventory } = useStore();
-  const ranked = useMemo(() => {
+  const ranked = useMemo((): RankedRestaurant | undefined => {
+    if (!restaurant) return undefined;
     if (event) {
-      return recommendRestaurants(event, prefs, bookings, 8, inventory).find(
+      const fromRank = recommendRestaurants(event, prefs, bookings, 8, inventory).find(
         (r) => r.id === restaurantId,
       );
+      if (fromRank) return fromRank;
     }
-    if (!restaurant) return undefined;
     return {
       ...restaurant,
       walkMinutes: Object.values(restaurant.walkMinutesByVenue)[0] ?? 10,
       score: 0,
       reasons: [] as string[],
       lastTrainRisk: restaurant.lastTrainSafe ? ("safe" as const) : ("tight" as const),
-      seatsRemaining: inventory[restaurantId] ?? restaurant.seatsLeft,
+      seatsRemaining: seatsRemaining(restaurant.id, bookings, inventory),
     };
   }, [event, restaurant, prefs, bookings, inventory, restaurantId]);
 
@@ -81,7 +82,10 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
           guestName: guestName.trim() || "客人",
           guestPhone: guestPhone.trim(),
         });
-        if (cancelled) return;
+        if (cancelled) {
+          if (!result) booked.current = false;
+          return;
+        }
         if (result) {
           setCreated(result);
           const text = bookingMessage({
@@ -107,23 +111,31 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
       timers.forEach(clearTimeout);
       clearTimeout(done);
     };
-  }, [
-    step,
-    script,
-    addBooking,
-    restaurantId,
-    eventId,
-    partySize,
-    slot,
-    event,
-    ranked,
-    guestName,
-    guestPhone,
-  ]);
+    // Only fire when entering the chat step; form fields are locked after submit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
-  if (!restaurant || !ranked) return null;
+  if (!restaurant) {
+    return (
+      <Modal onClose={onClose} labelledBy="book-title">
+        <div className="px-5 py-6">
+          <h3 id="book-title" className="display text-lg">
+            找不到餐廳
+          </h3>
+          <p className="mt-2 text-sm text-muted">這間餐廳可能已下架，或連結已過期。</p>
+          <button onClick={onClose} className="mt-4 w-full rounded-xl bg-gold py-2.5 font-black text-bg">
+            關閉
+          </button>
+        </div>
+      </Modal>
+    );
+  }
 
-  const canSubmit = guestName.trim().length >= 1 && guestPhone.replace(/\D/g, "").length >= 8;
+  if (!ranked) return null;
+
+  const seatsOk = ranked.seatsRemaining >= partySize;
+  const canSubmit =
+    guestName.trim().length >= 1 && guestPhone.replace(/\D/g, "").length >= 8 && seatsOk;
 
   return (
     <Modal onClose={onClose} labelledBy="book-title">
@@ -197,12 +209,17 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
               required
             />
           </label>
+          {!seatsOk && (
+            <p className="text-sm text-pink">
+              尚餘 {ranked.seatsRemaining} 席，不足 {partySize} 人。
+            </p>
+          )}
           <button
             disabled={!canSubmit}
             onClick={() => setStep("chat")}
             className="w-full rounded-xl bg-mint py-3 font-black text-bg disabled:opacity-40"
           >
-            預覽並發送訂座
+            {seatsOk ? "預覽並發送訂座" : "席位不足"}
           </button>
         </div>
       )}
@@ -250,7 +267,7 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
               {created && (
                 <button
                   onClick={() =>
-                    downloadText(`heungtime-${created.confirmationCode}.ics`, bookingToIcs(created))
+                    downloadText(`ease-${created.confirmationCode}.ics`, bookingToIcs(created))
                   }
                   className="mt-2 block w-full rounded-full border border-line py-2 text-sm"
                 >

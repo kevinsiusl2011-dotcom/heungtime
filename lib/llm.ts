@@ -3,7 +3,7 @@ import { buildNightPlan, recommendRestaurants } from "@/lib/rank";
 import { eventById, venueById } from "@/lib/data";
 import type { Booking, CalendarItem, ChatMessage, UserPrefs } from "@/lib/types";
 
-const SYSTEM = `你是「享時 HeungTime」香港生活日曆助理。用香港粵語／書面語夾雜、短句、可執行。
+const SYSTEM = `你是「享時 Ease」香港生活日曆助理。用香港粵語／書面語夾雜、短句、可執行。
 只根據工具回傳的活動與餐廳作答，不要發明場地或席位。
 目標：把演唱會／搶飛／球賽／商場／展覽接到日曆，散場後按步行、空位、尾班車推薦餐廳，再經 WhatsApp 訂座。
 C 端免費。不要談內部 CPA 金額。`;
@@ -61,6 +61,7 @@ function runTool(
   calendar: CalendarItem[],
   prefs: UserPrefs,
   bookings: Booking[],
+  inventory?: Record<string, number>,
 ) {
   let args: Record<string, unknown> = {};
   try {
@@ -70,7 +71,7 @@ function runTool(
   }
   if (name === "search_events") {
     const query = String(args.query ?? "");
-    const found = interpretQuery(query, calendar, prefs, bookings);
+    const found = interpretQuery(query, calendar, prefs, bookings, inventory);
     return {
       intent: found.intent,
       events: found.events.map((e) => ({
@@ -91,7 +92,7 @@ function runTool(
   if (name === "recommend_restaurants") {
     const event = eventById(String(args.eventId ?? ""));
     if (!event) return { error: "找不到活動" };
-    return recommendRestaurants(event, prefs, bookings, Number(args.limit) || 3).map((r) => ({
+    return recommendRestaurants(event, prefs, bookings, Number(args.limit) || 3, inventory).map((r) => ({
       id: r.id,
       name: r.name,
       walkMinutes: r.walkMinutes,
@@ -113,8 +114,9 @@ export async function llmAgentReply(
   calendar: CalendarItem[],
   prefs: UserPrefs,
   bookings: Booking[],
+  inventory?: Record<string, number>,
 ): Promise<ChatMessage> {
-  const fallback = agentReply(query, calendar, prefs, bookings);
+  const fallback = agentReply(query, calendar, prefs, bookings, inventory);
   if (!llmConfigured()) return fallback;
 
   const messages: { role: string; content?: string; tool_calls?: ToolCall[]; tool_call_id?: string }[] = [
@@ -161,7 +163,7 @@ export async function llmAgentReply(
       }
       messages.push({ role: "assistant", content: message.content, tool_calls: calls });
       for (const call of calls) {
-        const result = runTool(call.function.name, call.function.arguments, calendar, prefs, bookings);
+        const result = runTool(call.function.name, call.function.arguments, calendar, prefs, bookings, inventory);
         if (call.function.name === "search_events" && result && typeof result === "object" && "events" in result) {
           const found = result as {
             intent?: ChatMessage["intent"];

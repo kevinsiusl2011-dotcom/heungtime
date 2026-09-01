@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "享時 HeungTime",
+    name: "享時 Ease",
     short_name: "享時",
     description: "香港活動智能日曆：散場後按步行、空位與尾班車經 WhatsApp 訂座。",
     start_url: "/live",

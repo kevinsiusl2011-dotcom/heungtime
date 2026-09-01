@@ -25,26 +25,81 @@ export function addMinutes(iso: string, minutes: number) {
 }
 
 export function sameDay(a: string, b: string) {
-  const da = formatHk(a, { year: "numeric", month: "2-digit", day: "2-digit" });
-  const db = formatHk(b, { year: "numeric", month: "2-digit", day: "2-digit" });
-  return da === db;
+  return hkYmd(a) === hkYmd(b);
+}
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+export function hkParts(input: string | Date) {
+  const date = typeof input === "string" ? new Date(input) : input;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Hong_Kong",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    weekday: "short",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const g = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  return {
+    year: Number(g("year")),
+    month: Number(g("month")),
+    day: Number(g("day")),
+    hour: Number(g("hour")) % 24,
+    minute: Number(g("minute")),
+    second: Number(g("second")),
+    weekday: WEEKDAY_INDEX[g("weekday")] ?? 0,
+  };
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+export function hkYmd(input: string | Date) {
+  const p = hkParts(input);
+  return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;
+}
+
+export function hkHour(input: string | Date) {
+  return hkParts(input).hour;
+}
+
+export function hkWeekday(input: string | Date) {
+  return hkParts(input).weekday;
+}
+
+export function hkSlotDateTime(dateIso: string, slot: string) {
+  const [hh, mm] = slot.split(":");
+  const h = pad2(Number(hh) || 0);
+  const m = pad2(Number(mm) || 0);
+  return `${hkYmd(dateIso)}T${h}:${m}:00+08:00`;
+}
+
+export function shiftIsoDays(iso: string, days: number) {
+  return new Date(new Date(iso).getTime() + days * 86_400_000).toISOString();
 }
 
 export function weekStart(anchor = "2026-09-07T00:00:00+08:00") {
-  const d = new Date(anchor);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  const p = hkParts(anchor);
+  const diff = p.weekday === 0 ? -6 : 1 - p.weekday;
+  const mondayMs = Date.parse(`${hkYmd(anchor)}T00:00:00+08:00`) + diff * 86_400_000;
+  return new Date(mondayMs);
 }
 
 export function weekDays(start: Date) {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    return d;
-  });
+  return Array.from({ length: 7 }, (_, i) => new Date(start.getTime() + i * 86_400_000));
 }
 
 function toGoogleDates(startIso: string, endIso: string) {
@@ -81,6 +136,11 @@ export function toIcsDate(iso: string) {
     .replace(/\.\d{3}Z$/, "Z");
 }
 
+export function toIcsHk(iso: string) {
+  const p = hkParts(iso);
+  return `${p.year}${pad2(p.month)}${pad2(p.day)}T${pad2(p.hour)}${pad2(p.minute)}${pad2(p.second)}`;
+}
+
 function escapeIcs(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
 }
@@ -102,14 +162,24 @@ export function buildIcs(events: LocalEvent[], descriptions?: Record<string, str
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//HeungTime//HK Lifestyle Agent//ZH-HK",
+    "PRODID:-//Ease//HK Lifestyle Agent//ZH-HK",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     `REFRESH-INTERVAL;VALUE=DURATION:PT${FEED_REFRESH_HOURS}H`,
     `X-PUBLISHED-TTL:PT${FEED_REFRESH_HOURS}H`,
-    "X-WR-CALNAME:享時 HeungTime",
+    "X-WR-CALNAME:享時 Ease",
     "X-WR-TIMEZONE:Asia/Hong_Kong",
-    "X-WR-CALDESC:香港活動／享樂智能日曆。賽程改期自動刷新；活動描述含散場有位餐廳。C 端免費。",
+    "X-WR-CALDESC:香港活動／享時智能日曆。賽程改期自動刷新；活動描述含散場有位餐廳。C 端免費。",
+    "BEGIN:VTIMEZONE",
+    "TZID:Asia/Hong_Kong",
+    "X-LIC-LOCATION:Asia/Hong_Kong",
+    "BEGIN:STANDARD",
+    "TZOFFSETFROM:+0800",
+    "TZOFFSETTO:+0800",
+    "TZNAME:HKT",
+    "DTSTART:19700101T000000",
+    "END:STANDARD",
+    "END:VTIMEZONE",
   ];
 
   for (const event of events) {
@@ -121,8 +191,8 @@ export function buildIcs(events: LocalEvent[], descriptions?: Record<string, str
       `DTSTAMP:${stamp}`,
       `LAST-MODIFIED:${stamp}`,
       `SEQUENCE:${FEED_REVISION}`,
-      `DTSTART:${toIcsDate(event.startAt)}`,
-      `DTEND:${toIcsDate(event.endAt)}`,
+      `DTSTART;TZID=Asia/Hong_Kong:${toIcsHk(event.startAt)}`,
+      `DTEND;TZID=Asia/Hong_Kong:${toIcsHk(event.endAt)}`,
       foldIcs(`SUMMARY:${escapeIcs(event.title)}`),
       foldIcs(`LOCATION:${escapeIcs(venue ? `${venue.name}・${venue.address}` : "")}`),
       foldIcs(`DESCRIPTION:${escapeIcs(desc)}`),

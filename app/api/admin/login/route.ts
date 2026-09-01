@@ -1,12 +1,23 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { adminConfigured, adminPasswordOk, signValue } from "@/lib/server/session";
+import { adminConfigured, adminPasswordOk, sessionSecret, signValue } from "@/lib/server/session";
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/server/rateLimit";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   if (!adminConfigured()) {
     return NextResponse.json({ ok: false, error: "尚未設定 ADMIN_PASSWORD" }, { status: 503 });
+  }
+  if (!sessionSecret()) {
+    return NextResponse.json({ ok: false, error: "尚未設定 SESSION_SECRET" }, { status: 503 });
+  }
+  const limited = rateLimit(`admin:${clientIp(req)}`, { limit: 8, windowMs: 60_000 });
+  if (!limited.ok) {
+    return NextResponse.json(rateLimitResponse(limited.retryAfter), {
+      status: 429,
+      headers: { "Retry-After": String(limited.retryAfter) },
+    });
   }
   const body = (await req.json()) as { password?: string };
   if (!adminPasswordOk(body.password ?? "")) {

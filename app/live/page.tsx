@@ -20,8 +20,12 @@ import {
 } from "@/lib/agent";
 import {
   formatDate,
+  formatHk,
   formatTime,
   googleCalendarUrl,
+  hkHour,
+  hkYmd,
+  shiftIsoDays,
   weekDays,
   weekStart,
 } from "@/lib/calendar";
@@ -86,7 +90,7 @@ function LiveInner() {
   const plan = buildNightPlan(selected, calendar, prefs, coords);
   const alreadyIn = calendar.some((c) => c.eventId === selected.id);
   const days = weekDays(weekStart(weekAnchor));
-  const selectedDayKey = `${new Date(selected.startAt).getFullYear()}-${new Date(selected.startAt).getMonth()}-${new Date(selected.startAt).getDate()}`;
+  const selectedDayKey = hkYmd(selected.startAt);
   const chatEnd = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -122,7 +126,7 @@ function LiveInner() {
     pushMessage({ id: `u-${Date.now()}`, role: "user", text });
     setAsking(true);
     setQuery("");
-    let reply = agentReply(text, calendar, prefs, bookings);
+    let reply = agentReply(text, calendar, prefs, bookings, inventory);
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -288,7 +292,8 @@ function LiveInner() {
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <div>
               <p className="text-xs text-muted">
-                週曆 · {days[0].getMonth() + 1} 月 {days[0].getDate()}–{days[6].getDate()} 日
+                週曆 · {formatHk(days[0].toISOString(), { month: "numeric", day: "numeric" })}–
+                {formatHk(days[6].toISOString(), { day: "numeric" })}
               </p>
               <h2 className="display text-2xl">你的生活流</h2>
             </div>
@@ -301,25 +306,13 @@ function LiveInner() {
               </button>
               <button
                 className="rounded-full border border-line px-3 py-1 text-xs"
-                onClick={() =>
-                  setWeekAnchor((prev) => {
-                    const d = new Date(prev);
-                    d.setDate(d.getDate() - 7);
-                    return d.toISOString();
-                  })
-                }
+                onClick={() => setWeekAnchor((prev) => shiftIsoDays(prev, -7))}
               >
                 上一週
               </button>
               <button
                 className="rounded-full border border-line px-3 py-1 text-xs"
-                onClick={() =>
-                  setWeekAnchor((prev) => {
-                    const d = new Date(prev);
-                    d.setDate(d.getDate() + 7);
-                    return d.toISOString();
-                  })
-                }
+                onClick={() => setWeekAnchor((prev) => shiftIsoDays(prev, 7))}
               >
                 下一週
               </button>
@@ -329,7 +322,7 @@ function LiveInner() {
             <div className="grid min-w-[720px] grid-cols-8">
               <div className="border-b border-line p-2 text-xs text-muted" />
               {days.map((d) => {
-                const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+                const key = hkYmd(d);
                 const on = key === selectedDayKey;
                 return (
                 <div
@@ -337,12 +330,26 @@ function LiveInner() {
                   className={`border-b border-l border-line p-2 text-center ${on ? "bg-gold-soft" : ""}`}
                 >
                   <p className="text-xs text-muted">
-                    {d.toLocaleDateString("zh-HK", { weekday: "short" })}
+                    {formatHk(d.toISOString(), { weekday: "short" })}
                   </p>
-                  <p className={`font-medium ${on ? "text-gold" : ""}`}>{d.getDate()}</p>
+                  <p className={`font-medium ${on ? "text-gold" : ""}`}>
+                    {formatHk(d.toISOString(), { day: "numeric" })}
+                  </p>
                 </div>
               );
               })}
+              <AllDayRow days={days} items={calendar} selectedDayKey={selectedDayKey} />
+              {calendar.some((item) => days.some((day) => coversOvernight(item, day))) && (
+                <OvernightRow
+                  days={days}
+                  items={calendar}
+                  selectedDayKey={selectedDayKey}
+                  onSelectEvent={(id) => {
+                    const ev = eventById(id);
+                    if (ev) jumpToEvent(ev);
+                  }}
+                />
+              )}
               {HOURS.map((hour) => (
                 <HourRow
                   key={hour}
@@ -468,6 +475,99 @@ function LiveInner() {
   );
 }
 
+function coversAllDay(item: CalendarItem, day: Date) {
+  if (!item.allDay) return false;
+  const key = hkYmd(day);
+  const start = hkYmd(item.startAt);
+  const end = hkYmd(item.endAt);
+  if (end <= start) return key === start;
+  return key >= start && key < end;
+}
+
+function coversOvernight(item: CalendarItem, day: Date) {
+  if (item.allDay) return false;
+  return hkYmd(item.startAt) === hkYmd(day) && hkHour(item.startAt) < 8;
+}
+
+function AllDayRow({
+  days,
+  items,
+  selectedDayKey,
+}: {
+  days: Date[];
+  items: CalendarItem[];
+  selectedDayKey: string;
+}) {
+  return (
+    <>
+      <div className="border-b border-line px-2 py-3 text-right text-[11px] text-muted">全日</div>
+      {days.map((day) => {
+        const hits = items.filter((item) => coversAllDay(item, day));
+        const on = hkYmd(day) === selectedDayKey;
+        return (
+          <div
+            key={day.toISOString() + "all-day"}
+            className={`min-h-[40px] border-b border-l border-line p-1 ${on ? "bg-gold-soft/50" : "bg-field"}`}
+          >
+            {hits.map((item) => (
+              <div
+                key={item.id}
+                className="mb-1 w-full truncate rounded-md bg-gold-soft px-1.5 py-1 text-left text-[11px] font-medium text-ink"
+              >
+                全日 {item.title}
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function OvernightRow({
+  days,
+  items,
+  selectedDayKey,
+  onSelectEvent,
+}: {
+  days: Date[];
+  items: CalendarItem[];
+  selectedDayKey: string;
+  onSelectEvent: (eventId: string) => void;
+}) {
+  return (
+    <>
+      <div className="border-b border-line px-2 py-3 text-right text-[11px] text-muted">凌晨</div>
+      {days.map((day) => {
+        const hits = items.filter((item) => coversOvernight(item, day));
+        const on = hkYmd(day) === selectedDayKey;
+        return (
+          <div
+            key={day.toISOString() + "overnight"}
+            className={`min-h-[40px] border-b border-l border-line p-1 ${on ? "bg-gold-soft/50" : "bg-field"}`}
+          >
+            {hits.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => item.eventId && onSelectEvent(item.eventId)}
+                className={`mb-1 w-full truncate rounded-md px-1.5 py-1 text-left text-[11px] font-medium ${
+                  item.source === "agent"
+                    ? "bg-mint/15 text-mint"
+                    : item.source === "feed"
+                      ? "bg-pink/15 text-pink"
+                      : "bg-gold-soft text-ink"
+                }`}
+              >
+                {formatTime(item.startAt)} {item.title}
+              </button>
+            ))}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function HourRow({
   hour,
   days,
@@ -488,15 +588,10 @@ function HourRow({
       </div>
       {days.map((day) => {
         const hits = items.filter((item) => {
-          const start = new Date(item.startAt);
-          return (
-            start.getFullYear() === day.getFullYear() &&
-            start.getMonth() === day.getMonth() &&
-            start.getDate() === day.getDate() &&
-            start.getHours() === hour
-          );
+          if (item.allDay) return false;
+          return hkYmd(item.startAt) === hkYmd(day) && hkHour(item.startAt) === hour;
         });
-        const on = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}` === selectedDayKey;
+        const on = hkYmd(day) === selectedDayKey;
         return (
           <div
             key={day.toISOString() + hour}

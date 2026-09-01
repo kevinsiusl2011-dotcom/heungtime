@@ -9,7 +9,7 @@ export default function PrivacyPage() {
         <h1 className="display text-4xl text-ink">私隱政策</h1>
         <p className="mt-2 text-sm">最後更新：2026 年 9 月 1 日</p>
         <p className="mt-6">
-          享時 HeungTime（「我們」）把香港活動接到你的個人日程。我們採取資料最小化原則。
+          享時 Ease（「我們」）把香港活動接到你的個人日程。我們採取資料最小化原則。
         </p>
         <h2 className="mt-8 text-xl text-ink">我們收集什麼</h2>
         <p className="mt-3">

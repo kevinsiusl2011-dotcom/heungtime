@@ -5,6 +5,8 @@ import {
   commuteMinutes,
   commuteMinutesFromCoords,
   commuteNote,
+  lastTrainCaption,
+  lastTrainForStation,
   lastTrainForVenue,
   lastTrainRisk,
   minutesOfDay,
@@ -20,7 +22,7 @@ import type {
   UserPrefs,
 } from "./types";
 
-function restaurantCoords(r: Restaurant) {
+export function restaurantCoords(r: Restaurant) {
   const vid = r.nearVenueIds[0];
   const v = venueById(vid);
   if (!v) return { lat: 22.3, lng: 114.17 };
@@ -44,12 +46,14 @@ export function seatsRemaining(
 ) {
   const restaurant = RESTAURANTS.find((r) => r.id === restaurantId);
   if (!restaurant) return 0;
+  if (inventory && restaurantId in inventory) {
+    const remaining = Math.floor(Number(inventory[restaurantId]));
+    return Number.isFinite(remaining) ? Math.max(0, remaining) : 0;
+  }
   const used = bookings
     .filter((b) => b.restaurantId === restaurantId && b.status !== "cancelled")
     .reduce((sum, b) => sum + b.partySize, 0);
-  const local = Math.max(0, restaurant.seatsLeft - used);
-  if (inventory && restaurantId in inventory) return Math.min(local, inventory[restaurantId]);
-  return local;
+  return Math.max(0, restaurant.seatsLeft - used);
 }
 
 export function recommendRestaurants(
@@ -69,9 +73,11 @@ export function recommendRestaurants(
         ? walkMinutesBetween({ lat: venue.lat, lng: venue.lng }, restaurantCoords(r))
         : (mapped ?? 15);
     const remaining = seatsRemaining(r.id, bookings, inventory);
-    const risk = venue
-      ? lastTrainRisk(event.endAt, walkMinutes, lastTrainForVenue(venue))
-      : "safe";
+    const risk = lastTrainRisk(
+      event.endAt,
+      walkMinutes,
+      lastTrainForStation(r.mtrStation) ?? (venue ? lastTrainForVenue(venue) : undefined),
+    );
     const reasons: string[] = [];
     let score = 40;
 
@@ -196,7 +202,7 @@ export function buildNightPlan(
         : event.venueId === "home"
           ? "開波前入座，賽事期間不用換枱。"
           : `散場後 ${diningStart}–${diningEnd} 入座窗`,
-    lastTrain: venue ? `${venue.mtr} 尾班車 ${lastTrainForVenue(venue)}` : "—",
+    lastTrain: venue ? lastTrainCaption(venue) : "—",
     clash: conflictNote(event, calendar, prefs, coords),
     relatedDrop,
   };

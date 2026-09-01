@@ -25,9 +25,18 @@ export async function POST(req: Request) {
   if (!limited.ok) {
     return NextResponse.json(rateLimitResponse(limited.retryAfter), { status: 429 });
   }
-  const body = (await req.json()) as { key?: string; payload?: SyncPayload };
+  const raw = await req.text();
+  if (raw.length > 400_000) {
+    return NextResponse.json({ ok: false, error: "同步資料太大" }, { status: 413 });
+  }
+  let body: { key?: string; payload?: SyncPayload };
+  try {
+    body = JSON.parse(raw) as { key?: string; payload?: SyncPayload };
+  } catch {
+    return NextResponse.json({ ok: false, error: "JSON 無效" }, { status: 400 });
+  }
   const key = body.key?.trim().toUpperCase() ?? "";
-  if (!isSyncKey(key) || !body.payload) {
+  if (!isSyncKey(key) || !body.payload || typeof body.payload !== "object") {
     return NextResponse.json({ ok: false, error: "同步碼或資料無效" }, { status: 400 });
   }
   await putSync(key, body.payload);

@@ -11,6 +11,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState<"events" | "restaurants" | "bookings">("events");
   const [events, setEvents] = useState<LocalEvent[]>([]);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [seats, setSeats] = useState<Record<string, number>>({});
   const [venues, setVenues] = useState<CatalogPayload["venues"]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [ledger, setLedger] = useState<CpaEntry[]>([]);
@@ -18,10 +19,12 @@ export default function AdminPage() {
   const [note, setNote] = useState("");
 
   async function loadCatalog() {
-    const res = await fetch("/api/catalog");
-    const data = (await res.json()) as { catalog?: CatalogPayload };
+    const [catRes, invRes] = await Promise.all([fetch("/api/catalog"), fetch("/api/inventory")]);
+    const data = (await catRes.json()) as { catalog?: CatalogPayload };
+    const inv = (await invRes.json()) as { seats?: Record<string, number> };
     setEvents(data.catalog?.events ?? []);
     setRestaurants(data.catalog?.restaurants ?? []);
+    setSeats(inv.seats ?? {});
     setVenues(data.catalog?.venues ?? []);
   }
 
@@ -67,14 +70,27 @@ export default function AdminPage() {
     await Promise.all([loadCatalog(), loadOverview()]);
   }
 
-  async function saveCatalog() {
+  async function saveCatalog(which: "events" | "restaurants") {
+    const body =
+      which === "events"
+        ? { events, venues }
+        : { restaurants, venues, inventory: seats };
     const res = await fetch("/api/admin/catalog", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ events, restaurants, venues }),
+      body: JSON.stringify(body),
     });
-    const data = (await res.json()) as { ok?: boolean; error?: string };
-    setNote(data.ok ? "目錄已儲存" : data.error ?? "儲存失敗");
+    const data = (await res.json()) as { ok?: boolean; error?: string; skipped?: string[] };
+    if (!data.ok) {
+      setNote(data.error ?? "儲存失敗");
+      return;
+    }
+    setNote(
+      data.skipped?.length
+        ? `目錄已儲存，但略過未完整的餐廳：${data.skipped.join("、")}`
+        : "目錄已儲存",
+    );
+    await loadCatalog();
   }
 
   async function mark(code: string, status: "confirmed" | "attended") {
@@ -83,10 +99,13 @@ export default function AdminPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ confirmationCode: code, status }),
     });
-    if (res.ok) {
-      setNote(`${code} 已標為 ${status === "attended" ? "已入座" : "已確認"}`);
-      await loadOverview();
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || !data.ok) {
+      setNote(data.error ?? "更新狀態失敗");
+      return;
     }
+    setNote(`${code} 已標為 ${status === "attended" ? "已入座" : "已確認"}`);
+    await loadOverview();
   }
 
   if (!authed) {
@@ -177,7 +196,7 @@ export default function AdminPage() {
                 />
               </article>
             ))}
-            <button onClick={() => void saveCatalog()} className="rounded-xl bg-gold px-5 py-3 font-black text-bg">
+            <button onClick={() => void saveCatalog("events")} className="rounded-xl bg-gold px-5 py-3 font-black text-bg">
               儲存活動目錄
             </button>
           </section>
@@ -189,15 +208,13 @@ export default function AdminPage() {
               <article key={r.id} className="glass grid gap-2 rounded-2xl p-4 md:grid-cols-4">
                 <p className="font-bold md:col-span-2">{r.name}</p>
                 <label className="text-sm">
-                  剩餘席
+                  剩餘席（即時庫存）
                   <input
                     type="number"
                     className="mt-1 w-full rounded-xl border border-line bg-field px-3 py-2"
-                    value={r.seatsLeft}
+                    value={seats[r.id] ?? r.seatsLeft}
                     onChange={(e) =>
-                      setRestaurants((prev) =>
-                        prev.map((x, j) => (j === i ? { ...x, seatsLeft: Number(e.target.value) } : x)),
-                      )
+                      setSeats((prev) => ({ ...prev, [r.id]: Number(e.target.value) }))
                     }
                   />
                 </label>
@@ -240,7 +257,7 @@ export default function AdminPage() {
                 </label>
               </article>
             ))}
-            <button onClick={() => void saveCatalog()} className="rounded-xl bg-gold px-5 py-3 font-black text-bg">
+            <button onClick={() => void saveCatalog("restaurants")} className="rounded-xl bg-gold px-5 py-3 font-black text-bg">
               儲存餐廳目錄
             </button>
           </section>

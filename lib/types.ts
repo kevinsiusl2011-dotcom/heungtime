@@ -98,6 +98,7 @@ export interface CalendarItem {
   description: string;
   source: "user" | "feed" | "agent";
   restaurantIds?: string[];
+  allDay?: boolean;
 }
 
 export interface Booking {
@@ -165,6 +166,8 @@ export interface CatalogPayload {
   venues?: Venue[];
   events?: LocalEvent[];
   restaurants?: Restaurant[];
+  /** 即時剩餘席。與 restaurants[].seatsLeft（目錄容量）分開，避免儲存活動時覆寫庫存。 */
+  inventory?: Record<string, number>;
 }
 
 export interface CpaEntry {

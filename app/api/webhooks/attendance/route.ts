@@ -20,10 +20,13 @@ export async function POST(req: Request) {
   }
   const code = body.confirmationCode?.trim();
   if (!code) return NextResponse.json({ ok: false, error: "缺少確認編號" }, { status: 400 });
-  const result = await updateBookingStatus(code, body.status === "confirmed" ? "confirmed" : "attended");
+  if (body.status !== "confirmed" && body.status !== "attended") {
+    return NextResponse.json({ ok: false, error: "狀態無效" }, { status: 400 });
+  }
+  const result = await updateBookingStatus(code, body.status);
   if (!result.found) return NextResponse.json({ ok: false, error: "找不到訂座" }, { status: 404 });
   if (!result.updated) {
-    return NextResponse.json({ ok: false, error: result.reason, booking: result.booking }, { status: 409 });
+    return NextResponse.json({ ok: false, error: result.reason }, { status: 409 });
   }
   return NextResponse.json({ ok: true, booking: result.booking });
 }

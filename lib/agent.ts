@@ -1,5 +1,6 @@
 import { EVENTS, RESTAURANTS, venueById } from "./data";
-import { formatDateTime, formatTime } from "./calendar";
+import { formatDateTime, formatTime, hkWeekday } from "./calendar";
+import { lastTrainCaption } from "./geo";
 import { DEFAULT_PREFS } from "./labels";
 import { buildNightPlan, postEventSlot, recommendRestaurants } from "./rank";
 import type {
@@ -21,7 +22,7 @@ export function calendarDescription(event: LocalEvent, restaurants: RankedRestau
     "",
     "—— 享時夜歸計劃 ——",
     `${formatDateTime(event.startAt)} @ ${venue?.name ?? ""}`,
-    venue ? `${venue.mtr} 尾班車 ${venue.lastTrain}` : "",
+    venue ? lastTrainCaption(venue) : "",
   ];
 
   if (restaurants.length) {
@@ -54,7 +55,7 @@ export function emailCopy(event: LocalEvent, restaurants: RankedRestaurant[]) {
 
 場地：${venue?.name ?? ""}（${venue?.district ?? ""}）
 時間：${formatDateTime(event.startAt)} – ${formatTime(event.endAt)}
-${venue ? `尾班車：${venue.mtr} ${venue.lastTrain}` : ""}
+${venue ? lastTrainCaption(venue) : ""}
 
 附近按步行、空位、尾班車安全排序：
 
@@ -62,7 +63,7 @@ ${recs}
 
 一鍵經 WhatsApp 向商戶發送訂座。確認後會寫回你的享時日曆。
 
-— 享時 HeungTime`,
+— 享時 Ease`,
   };
 }
 
@@ -115,6 +116,7 @@ export function interpretQuery(
   calendar: CalendarItem[],
   prefs: UserPrefs,
   bookings: Booking[],
+  inventory?: Record<string, number>,
 ) {
   const q = query.toLowerCase();
   const intent = detectIntent(query);
@@ -124,10 +126,14 @@ export function interpretQuery(
   if (/平啲|便宜|budget/.test(q)) nextPrefs.maxPrice = 2;
   if (/高級|慶祝/.test(q)) nextPrefs.maxPrice = 4;
 
+  const tokens = q.split(/\s+/).filter((token) => token.length >= 2);
   let matched = EVENTS.filter((event) => {
     const blob = `${event.title} ${event.titleEn} ${event.tags.join(" ")} ${event.description}`.toLowerCase();
     if (q.length >= 2 && blob.includes(q)) return true;
-    return event.tags.some((tag) => q.includes(tag.toLowerCase()) || blob.includes(q.slice(0, 2)));
+    return (
+      tokens.some((token) => blob.includes(token)) ||
+      event.tags.some((tag) => q.includes(tag.toLowerCase()))
+    );
   });
 
   if (!matched.length) {
@@ -137,7 +143,7 @@ export function interpretQuery(
   }
 
   if (/星期六|周六|saturday/.test(q)) {
-    matched = matched.filter((event) => new Date(event.startAt).getDay() === 6);
+    matched = matched.filter((event) => hkWeekday(event.startAt) === 6);
   }
 
   if (!matched.length && /食|訂|餐廳|宵夜/.test(q)) {
@@ -151,7 +157,7 @@ export function interpretQuery(
   );
 
   const restaurants = unique
-    .flatMap((event) => recommendRestaurants(event, nextPrefs, bookings, 2))
+    .flatMap((event) => recommendRestaurants(event, nextPrefs, bookings, 2, inventory))
     .concat(
       namedRestaurant
         ? recommendRestaurants(
@@ -159,6 +165,7 @@ export function interpretQuery(
             nextPrefs,
             bookings,
             8,
+            inventory,
           ).filter((r) => r.id === namedRestaurant.id)
         : [],
     );
@@ -173,8 +180,9 @@ export function agentReply(
   calendar: CalendarItem[],
   prefs: UserPrefs = DEFAULT_PREFS,
   bookings: Booking[] = [],
+  inventory?: Record<string, number>,
 ): ChatMessage {
-  const { events, restaurants, intent } = interpretQuery(query, calendar, prefs, bookings);
+  const { events, restaurants, intent } = interpretQuery(query, calendar, prefs, bookings, inventory);
   const id = `m-${Date.now()}`;
 
   if (intent === "help" || (!events.length && !restaurants.length)) {

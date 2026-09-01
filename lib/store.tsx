@@ -10,13 +10,12 @@ import {
   useState,
 } from "react";
 import { calendarDescription } from "./agent";
-import { itemFromEvent, seedCalendar } from "./calendar";
+import { hkSlotDateTime, itemFromEvent, seedCalendar } from "./calendar";
 import { applyCatalog, EVENTS, RESTAURANTS } from "./data";
 import { parseIcs } from "./icsParse";
 import { DEFAULT_PROFILE } from "./labels";
-import { recommendRestaurants, seatsRemaining } from "./rank";
+import { recommendRestaurants } from "./rank";
 import { createSyncKey, isSyncKey } from "./syncKey";
-import { confirmationCode } from "./whatsapp";
 import type {
   Booking,
   CalendarItem,
@@ -86,17 +85,14 @@ const DEFAULT_FEEDS: FeedId[] = ["concerts", "ticket-drops", "hk-sports"];
 
 function bookingCalendarItem(created: Booking) {
   const restaurant = RESTAURANTS.find((r) => r.id === created.restaurantId);
-  const event = EVENTS.find((e) => e.id === created.eventId);
-  const date = event?.startAt ?? created.date;
-  const [hh, mm] = created.slot.split(":");
-  const start = new Date(date);
-  start.setHours(Number(hh), Number(mm), 0, 0);
-  const end = new Date(start.getTime() + 90 * 60_000);
+  const date = created.date || EVENTS.find((e) => e.id === created.eventId)?.startAt;
+  const startAt = hkSlotDateTime(date ?? new Date().toISOString(), created.slot);
+  const endAt = new Date(new Date(startAt).getTime() + 90 * 60_000).toISOString();
   return {
     id: `cal-${created.id}`,
     title: `訂座：${restaurant?.name ?? "餐廳"}`,
-    startAt: start.toISOString(),
-    endAt: end.toISOString(),
+    startAt,
+    endAt,
     location: restaurant ? `${restaurant.name}・${restaurant.district}` : "",
     description: `${created.confirmationCode}｜${created.partySize} 位｜${created.guestName}`,
     source: "agent" as const,
@@ -352,57 +348,52 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         );
         return created;
       } catch {
-        const left = seatsRemaining(booking.restaurantId, bookings, inventory);
-        if (left < booking.partySize) {
-          notify("此餐廳剩餘席位不足");
-          return null;
-        }
-        const created: Booking = {
-          ...booking,
-          id: `bk-${Date.now()}`,
-          via: "autochat",
-          confirmationCode: confirmationCode(),
-          createdAt: new Date().toISOString(),
-        };
-        setBookings((prev) => [...prev, created]);
-        setCalendar((prev) => [...prev, bookingCalendarItem(created)]);
-        notify(`未能連線伺服器，已在本機暫存 ${created.confirmationCode}`);
-        return created;
+        notify("未能連線伺服器，請稍後再試");
+        return null;
       }
     },
-    [bookings, inventory, notify],
+    [notify],
   );
 
   const cancelBooking = useCallback(
     async (code: string) => {
       const local = bookings.find((b) => b.confirmationCode === code);
+      if (local?.status === "cancelled") {
+        notify("此訂座已取消");
+        return false;
+      }
+      if (local?.status === "attended") {
+        notify("已入座的訂座不能取消");
+        return false;
+      }
       try {
         const res = await fetch("/api/book/cancel", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confirmationCode: code }),
         });
-        const data = (await res.json()) as { ok?: boolean; error?: string };
+        const data = (await res.json()) as {
+          ok?: boolean;
+          error?: string;
+          alreadyCancelled?: boolean;
+          seatsRemaining?: number;
+        };
         if (!res.ok || !data.ok) {
-          if (res.status === 404 && local) {
-            /* server never saw it — still cancel locally */
-          } else {
-            notify(data.error ?? "取消失敗");
-            return false;
-          }
+          notify(data.error ?? "取消失敗");
+          return false;
+        }
+        if (typeof data.seatsRemaining === "number" && local) {
+          setInventory((prev) => ({ ...prev, [local.restaurantId]: data.seatsRemaining! }));
         }
       } catch {
-        /* offline: still cancel locally */
+        notify("未能連線伺服器，無法取消");
+        return false;
       }
       setBookings((prev) =>
         prev.map((b) => (b.confirmationCode === code ? { ...b, status: "cancelled" } : b)),
       );
       if (local) {
         setCalendar((prev) => prev.filter((c) => c.id !== `cal-${local.id}`));
-        setInventory((prev) => ({
-          ...prev,
-          [local.restaurantId]: (prev[local.restaurantId] ?? 0) + local.partySize,
-        }));
       }
       notify(`已取消訂座 ${code}`);
       void refreshInventory();
@@ -415,14 +406,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     (text: string) => {
       const items = parseIcs(text);
       if (!items.length) return 0;
-      setCalendar((prev) => {
-        const titles = new Set(prev.map((c) => `${c.title}|${c.startAt}`));
-        const extra = items.filter((c) => !titles.has(`${c.title}|${c.startAt}`));
-        return [...prev, ...extra];
-      });
-      return items.length;
+      const titles = new Set(calendar.map((c) => `${c.title}|${c.startAt}`));
+      const extra = items.filter((c) => !titles.has(`${c.title}|${c.startAt}`));
+      if (!extra.length) return 0;
+      setCalendar((prev) => [...prev, ...extra]);
+      return extra.length;
     },
-    [],
+    [calendar],
   );
 
   const requestGeo = useCallback(() => {
@@ -488,11 +478,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       };
       setLeads((prev) => [...prev, created]);
       try {
-        await fetch("/api/leads", {
+        const res = await fetch("/api/leads", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(lead),
         });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
+          notify(data.error ?? "合作申請送出失敗");
+          return;
+        }
         notify("已收到合作申請，我們會以 WhatsApp 回覆");
       } catch {
         notify("已在本機記下申請，稍後再同步");

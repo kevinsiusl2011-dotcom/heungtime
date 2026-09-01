@@ -25,7 +25,12 @@ export function bookingMessage(input: {
 請商戶回覆確認或留位。`;
 }
 
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
 export function confirmationCode() {
-  const n = Math.floor(1000 + Math.random() * 9000);
-  return `HT-${n}`;
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (const b of bytes) out += CODE_ALPHABET[b % CODE_ALPHABET.length];
+  return `HT-${out}`;
 }
