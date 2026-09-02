@@ -126,12 +126,12 @@ function LiveInner() {
     pushMessage({ id: `u-${Date.now()}`, role: "user", text });
     setAsking(true);
     setQuery("");
-    let reply = agentReply(text, calendar, prefs, bookings, inventory);
+    let reply = agentReply(text, calendar, prefs, bookings, inventory, coords);
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: text, calendar, prefs, bookings }),
+        body: JSON.stringify({ query: text, calendar, prefs, bookings, coords }),
       });
       const data = (await res.json()) as { ok?: boolean; message?: typeof reply };
       if (res.ok && data.message) reply = data.message;

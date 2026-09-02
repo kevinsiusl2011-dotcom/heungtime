@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start -p 3289",
     "lint": "next lint",
-    "test": "tsx --test lib/rank.test.ts lib/geo.test.ts lib/calendar.test.ts lib/server/rateLimit.test.ts"
+    "test": "tsx --test lib/rank.test.ts lib/geo.test.ts lib/calendar.test.ts lib/server/rateLimit.test.ts lib/agent.test.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",
