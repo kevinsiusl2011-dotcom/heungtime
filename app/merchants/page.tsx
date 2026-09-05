@@ -8,11 +8,17 @@ import type { Booking, CpaEntry } from "@/lib/types";
 
 export default function MerchantsPage() {
   const { stats, bookings, addLead } = useStore();
-  const totalSpend = stats.reduce((s, x) => s + x.spend, 0);
+  const totalCpa = stats.reduce((s, x) => s + x.spend, 0);
+  const totalAuction = stats.reduce((s, x) => s + (x.auctionSpend ?? 0), 0);
+  const totalAdImpressions = stats.reduce((s, x) => s + (x.adImpressions ?? 0), 0);
+  const totalAdClicks = stats.reduce((s, x) => s + (x.adClicks ?? 0), 0);
+  const totalSpend = totalCpa + totalAuction;
+  const totalCpaBookings = stats.reduce((s, x) => s + (x.cpaBookings ?? 0), 0);
   const totalBookings = bookings.filter((b) => b.status === "confirmed" || b.status === "attended").length;
   const totalImpressions = stats.reduce((s, x) => s + x.impressions, 0);
   const avgConv =
     totalImpressions === 0 ? 0 : stats.reduce((s, x) => s + x.bookings, 0) / totalImpressions;
+  const adCtr = totalAdImpressions === 0 ? 0 : totalAdClicks / totalAdImpressions;
 
   const [name, setName] = useState("");
   const [restaurant, setRestaurant] = useState("");
@@ -53,33 +59,50 @@ export default function MerchantsPage() {
 
         <MerchantDesk />
 
-        <div className="mt-8 grid gap-4 md:grid-cols-4">
+        <div className="mt-8 grid gap-4 md:grid-cols-3 lg:grid-cols-6">
           <Stat label="意圖曝光" value={String(totalImpressions)} hint="寫入日曆／Agent 推薦" />
+          <Stat label="廣告曝光" value={String(totalAdImpressions)} hint="含 sponsored 競標位" />
+          <Stat label="廣告點擊／CTR" value={`${totalAdClicks} · ${Math.round(adCtr * 100)}%`} hint="banner + adCreative" />
+          <Stat label="已入座 CPA" value={String(totalCpaBookings)} hint="核銷成功的抽佣訂座" />
           <Stat label="已確認訂座" value={String(totalBookings)} hint="本機確認／即時留位" />
-          <Stat
-            label="廣告費"
-            value={`HK$${totalSpend.toLocaleString()}`}
-            hint="CPA × 已入座（核銷）"
-          />
           <Stat
             label="平均轉化"
             value={`${Math.round(avgConv * 100)}%`}
             hint="訂座／曝光"
           />
+          <Stat
+            label="CPA 抽佣"
+            value={`HK$${totalCpa.toLocaleString()}`}
+            hint="按確認入座 × CPA"
+          />
+          <Stat
+            label="競標消費"
+            value={`HK$${totalAuction.toLocaleString()}`}
+            hint="bidPerBooking × 入座"
+          />
+          <Stat
+            label="總廣告費"
+            value={`HK$${totalSpend.toLocaleString()}`}
+            hint="CPA + 競標"
+            highlight
+          />
         </div>
 
         <section className="mt-10 overflow-x-auto rounded-3xl border border-line">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="bg-gold-soft text-ink">
               <tr>
                 <th className="px-4 py-3 font-medium">商戶</th>
                 <th className="px-4 py-3 font-medium">區域</th>
                 <th className="px-4 py-3 font-medium">曝光</th>
+                <th className="px-4 py-3 font-medium">廣告</th>
                 <th className="px-4 py-3 font-medium">點擊</th>
                 <th className="px-4 py-3 font-medium">訂座</th>
+                <th className="px-4 py-3 font-medium">CPA 入座</th>
                 <th className="px-4 py-3 font-medium">轉化</th>
                 <th className="px-4 py-3 font-medium">CPA</th>
-                <th className="px-4 py-3 font-medium">廣告費</th>
+                <th className="px-4 py-3 font-medium">競標</th>
+                <th className="px-4 py-3 font-medium">總支出</th>
               </tr>
             </thead>
             <tbody>
@@ -90,15 +113,19 @@ export default function MerchantsPage() {
                   <tr key={row.restaurantId} className="border-t border-line">
                     <td className="px-4 py-3">
                       {r.name}
-                      {r.sponsored && <span className="ml-2 text-xs text-gold">合作</span>}
+                      {r.sponsored && <span className="ml-2 text-xs text-pink">合作</span>}
+                      {r.auctionBid?.bidPerBooking ? <span className="ml-2 text-[10px] text-mint">競標</span> : null}
                     </td>
                     <td className="px-4 py-3 text-muted">{r.district}</td>
                     <td className="px-4 py-3">{row.impressions}</td>
-                    <td className="px-4 py-3">{row.clicks}</td>
+                    <td className="px-4 py-3 text-mint">{row.adImpressions ?? 0}</td>
+                    <td className="px-4 py-3">{row.adClicks ?? 0}</td>
                     <td className="px-4 py-3">{row.bookings}</td>
+                    <td className="px-4 py-3 font-semibold">{row.cpaBookings ?? 0}</td>
                     <td className="px-4 py-3">{Math.round(row.conversion * 100)}%</td>
                     <td className="px-4 py-3 text-muted">HK${r.advertiserCpa}</td>
-                    <td className="px-4 py-3 text-gold">HK${row.spend}</td>
+                    <td className="px-4 py-3 text-pink">HK${row.auctionSpend ?? 0}</td>
+                    <td className="px-4 py-3 text-gold font-bold">HK${row.totalSpend ?? row.spend}</td>
                   </tr>
                 );
               })}
@@ -346,11 +373,11 @@ function MerchantDesk() {
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint: string }) {
+function Stat({ label, value, hint, highlight }: { label: string; value: string; hint: string; highlight?: boolean }) {
   return (
-    <article className="glass rounded-3xl p-5">
+    <article className={`rounded-3xl p-5 ${highlight ? "bg-gradient-to-br from-pink-50 via-gold-50 to-mint-50 dark:from-pink-950/30 dark:via-gold-950/20 dark:to-mint-950/20 border border-pink/30" : "glass"}`}>
       <p className="text-xs text-muted">{label}</p>
-      <p className="display mt-2 text-4xl text-gold">{value}</p>
+      <p className={`display mt-2 text-3xl ${highlight ? "text-pink" : "text-gold"}`}>{value}</p>
       <p className="mt-1 text-xs text-muted">{hint}</p>
     </article>
   );

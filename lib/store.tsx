@@ -21,8 +21,10 @@ import type {
   CalendarItem,
   ChatMessage,
   FeedId,
+  LocalEvent,
   MerchantLead,
   MerchantStat,
+  RankedRestaurant,
   SyncPayload,
   ToastItem,
   UserPrefs,
@@ -81,11 +83,12 @@ interface StoreValue {
 
 const StoreContext = createContext<StoreValue | null>(null);
 
-const DEFAULT_FEEDS: FeedId[] = ["concerts", "ticket-drops", "hk-sports"];
+const DEFAULT_FEEDS: FeedId[] = ["concerts", "ticket-drops", "hk-sports", "movies", "festivals", "workshops", "nightlife"];
 
 function bookingCalendarItem(created: Booking) {
   const restaurant = RESTAURANTS.find((r) => r.id === created.restaurantId);
-  const date = created.date || EVENTS.find((e) => e.id === created.eventId)?.startAt;
+  const event = created.eventId ? EVENTS.find((e) => e.id === created.eventId) : undefined;
+  const date = created.date || event?.startAt;
   const startAt = hkSlotDateTime(date ?? new Date().toISOString(), created.slot);
   const endAt = new Date(new Date(startAt).getTime() + 90 * 60_000).toISOString();
   return {
@@ -94,7 +97,11 @@ function bookingCalendarItem(created: Booking) {
     startAt,
     endAt,
     location: restaurant ? `${restaurant.name}・${restaurant.district}` : "",
-    description: `${created.confirmationCode}｜${created.partySize} 位｜${created.guestName}`,
+    description: calendarDescription(
+      event as LocalEvent,
+      restaurant ? [restaurant as unknown as RankedRestaurant] : [],
+      created,
+    ),
     source: "agent" as const,
     restaurantIds: [created.restaurantId],
   };
@@ -158,6 +165,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     setProfile((prev) => (prev.syncKey ? prev : { ...prev, syncKey: createSyncKey() }));
+  }, [ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    setProfile((prev) => {
+      if (prev.referralCode) return prev;
+      const code = "HT-" + Math.random().toString(36).slice(2, 7).toUpperCase();
+      return { ...prev, referralCode: code };
+    });
   }, [ready]);
 
   useEffect(() => {
@@ -318,12 +334,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     async (booking: Omit<Booking, "id" | "via" | "confirmationCode" | "createdAt">) => {
       const restaurant = RESTAURANTS.find((r) => r.id === booking.restaurantId);
       if (!restaurant) return null;
+      const referralToken = profile.referralCode ? `${profile.referralCode}-${Date.now().toString(36)}` : "";
+      const cpaAmount = restaurant.advertiserCpa + (restaurant.auctionBid?.bidPerBooking ?? 0);
 
       try {
         const res = await fetch("/api/book", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(booking),
+          body: JSON.stringify({
+            ...booking,
+            referralToken,
+            cpaAmount,
+          }),
         });
         const data = (await res.json()) as {
           ok?: boolean;
@@ -339,6 +361,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           return null;
         }
         const created = data.booking;
+        if (!created.referralToken) created.referralToken = referralToken;
+        if (!created.cpaAmount) created.cpaAmount = cpaAmount;
         setBookings((prev) => [...prev.filter((b) => b.id !== created.id), created]);
         setCalendar((prev) => [...prev.filter((c) => c.id !== `cal-${created.id}`), bookingCalendarItem(created)]);
         notify(
@@ -352,7 +376,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
     },
-    [notify],
+    [notify, profile.referralCode],
   );
 
   const cancelBooking = useCallback(
@@ -566,16 +590,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const stats = useMemo<MerchantStat[]>(() => {
     return RESTAURANTS.map((r) => {
       const bks = bookings.filter((b) => b.restaurantId === r.id && b.status !== "cancelled");
+      const attendedBks = bks.filter((b) => b.status === "attended");
       const imps = impressions[r.id] ?? 0;
+      const adImps = r.sponsored ? Math.round(imps * 0.6 + bks.length * 3) : 0;
+      const adClicks = clicks[r.id] ?? 0 + (r.sponsored ? Math.round(imps * 0.08) : 0);
+      const auctionSpend = attendedBks.reduce(
+        (s) => s + (r.auctionBid?.bidPerBooking ?? 0),
+        0,
+      );
+      const cpaSpend = attendedBks.length * r.advertiserCpa;
       return {
         restaurantId: r.id,
         impressions: imps,
         clicks: clicks[r.id] ?? 0,
         bookings: bks.length,
-        spend: bks.filter((b) => b.status === "attended").length * r.advertiserCpa,
+        spend: cpaSpend,
         conversion: imps ? bks.length / imps : 0,
+        adImpressions: adImps,
+        adClicks,
+        auctionSpend,
+        cpaBookings: attendedBks.length,
+        totalSpend: cpaSpend + auctionSpend,
       };
-    }).sort((a, b) => b.spend - a.spend || b.impressions - a.impressions);
+    }).sort((a, b) => b.totalSpend - a.totalSpend || b.impressions - a.impressions);
   }, [bookings, clicks, impressions, catalogRev]);
 
   const pushMessage = useCallback((msg: ChatMessage) => {

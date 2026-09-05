@@ -3,21 +3,33 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./ThemeToggle";
+import { DAYDREAM_REFERRAL_URL } from "@/lib/data";
 
 export function Brand({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const text = size === "lg" ? "text-3xl" : size === "sm" ? "text-lg" : "text-xl";
   return (
-    <Link href="/" className="flex items-center gap-2">
-      <span className="relative grid h-9 w-9 rotate-[-8deg] place-items-center rounded-xl bg-gold text-bg shadow-[4px_4px_0_0_#ff3d8a]">
-        <span className="text-sm font-black">時</span>
-      </span>
-      <span className={`display ${text}`}>
-        享時
-        <span className="ml-1.5 font-sans text-[0.55em] font-bold tracking-widest text-mint">
-          LIVE
+    <div className="flex items-center gap-3">
+      <Link href="/" className="flex items-center gap-2">
+        <span className="relative grid h-9 w-9 rotate-[-8deg] place-items-center rounded-xl bg-gold text-bg shadow-[4px_4px_0_0_#ff3d8a]">
+          <span className="text-sm font-black">時</span>
         </span>
-      </span>
-    </Link>
+        <span className={`display ${text}`}>
+          享時
+          <span className="ml-1.5 font-sans text-[0.55em] font-bold tracking-widest text-mint">
+            LIVE
+          </span>
+        </span>
+      </Link>
+      <a
+        href={`${DAYDREAM_REFERRAL_URL}?utm_source=heungtime&utm_campaign=nav-brand&utm_medium=navbadge`}
+        target="_blank"
+        rel="noreferrer"
+        className="hidden items-center gap-1 rounded-full border border-pink/40 bg-pink/10 px-2 py-0.5 text-[10px] font-bold text-pink transition hover:bg-pink/20 sm:inline-flex"
+        title="去 Daydream Pro 睇命理"
+      >
+        🍀 問大師
+      </a>
+    </div>
   );
 }
 

@@ -3,7 +3,11 @@ export type EventCategory =
   | "ticket-drop"
   | "sports"
   | "mall"
-  | "exhibition";
+  | "exhibition"
+  | "movie"
+  | "festival"
+  | "workshop"
+  | "nightlife";
 
 export type FeedId =
   | "concerts"
@@ -11,9 +15,21 @@ export type FeedId =
   | "hk-sports"
   | "global-sports"
   | "malls"
-  | "arts";
+  | "arts"
+  | "movies"
+  | "festivals"
+  | "workshops"
+  | "nightlife";
 
-export interface Venue {
+export type DiningOccasion =
+  | "casual"
+  | "date"
+  | "celebration"
+  | "business"
+  | "family"
+  | "post-event";
+
+export type Venue = {
   id: string;
   name: string;
   district: string;
@@ -23,9 +39,10 @@ export interface Venue {
   mtr: string;
   lastTrain: string;
   commuteFromCentralMin: number;
-}
+  tags?: string[];
+};
 
-export interface LocalEvent {
+export type LocalEvent = {
   id: string;
   title: string;
   titleEn: string;
@@ -38,9 +55,11 @@ export interface LocalEvent {
   relatedEventId?: string;
   description: string;
   tags: string[];
-}
+  ticketType?: "presale" | "public" | "free";
+  mood?: string;
+};
 
-export interface Restaurant {
+export type Restaurant = {
   id: string;
   name: string;
   cuisine: string;
@@ -61,34 +80,51 @@ export interface Restaurant {
   autoChatReady: boolean;
   whatsapp: string;
   pitch: string;
-}
+  ambiance?: DiningOccasion[];
+  conversionRate30d?: number;
+  auctionBid?: {
+    eventId?: string;
+    bidPerBooking?: number;
+    boostedSlotStart?: string;
+    boostedSlotEnd?: string;
+  };
+  adCreative?: {
+    badgeLabel?: string;
+    headline?: string;
+  };
+};
 
-export interface UserPrefs {
+export type UserPrefs = {
   partySize: number;
   maxPrice: 1 | 2 | 3 | 4;
   cuisines: string[];
   needLastTrain: boolean;
   homeDistrict: string;
-}
+  occasion?: DiningOccasion;
+};
 
-export interface UserProfile {
+export type UserProfile = {
   name: string;
   phone: string;
   email: string;
   onboarded: boolean;
   prefs: UserPrefs;
   syncKey?: string;
-}
+  referralCode?: string;
+  referredCount?: number;
+};
 
-export interface RankedRestaurant extends Restaurant {
+export type RankedRestaurant = Restaurant & {
   walkMinutes: number;
   score: number;
   reasons: string[];
   lastTrainRisk: "safe" | "tight" | "miss";
   seatsRemaining: number;
-}
+  boostApplied?: number;
+  scenarioWeights?: Record<string, number>;
+};
 
-export interface CalendarItem {
+export type CalendarItem = {
   id: string;
   eventId?: string;
   title: string;
@@ -99,9 +135,10 @@ export interface CalendarItem {
   source: "user" | "feed" | "agent";
   restaurantIds?: string[];
   allDay?: boolean;
-}
+  referralShareToken?: string;
+};
 
-export interface Booking {
+export type Booking = {
   id: string;
   restaurantId: string;
   eventId?: string;
@@ -116,43 +153,59 @@ export interface Booking {
   createdAt: string;
   attendedAt?: string;
   whatsappDispatched?: boolean;
-}
+  referralToken?: string;
+  cpaAmount?: number;
+};
 
-export interface ChatMessage {
+export type ChatMessage = {
   id: string;
   role: "user" | "agent";
   text: string;
   eventIds?: string[];
   restaurantIds?: string[];
   intent?: AgentIntent;
-}
+  quickReplies?: { label: string; action: string; payload?: unknown }[];
+  promoBlock?: {
+    label: string;
+    text: string;
+    url: string;
+    emoji: string;
+  };
+};
 
-export type AgentIntent = "search" | "pin" | "book" | "prefs" | "help";
+export type AgentIntent = "search" | "pin" | "book" | "prefs" | "help" | "share";
 
-export interface MerchantStat {
+export type MerchantStat = {
   restaurantId: string;
   impressions: number;
   clicks: number;
   bookings: number;
   spend: number;
   conversion: number;
-}
+  adImpressions?: number;
+  adClicks?: number;
+  auctionSpend?: number;
+  cpaBookings?: number;
+  totalSpend?: number;
+  avgSeatFillBoost?: number;
+};
 
-export interface NightPlan {
+export type NightPlan = {
   commuteMin: number;
   commuteNote: string;
   diningWindow: string;
   lastTrain: string;
   clash: string | null;
   relatedDrop?: LocalEvent;
-}
+  luckyHint?: string;
+};
 
-export interface ToastItem {
+export type ToastItem = {
   id: string;
   text: string;
-}
+};
 
-export interface MerchantLead {
+export type MerchantLead = {
   id: string;
   name: string;
   restaurant: string;
@@ -160,26 +213,26 @@ export interface MerchantLead {
   phone: string;
   note: string;
   createdAt: string;
-}
+};
 
-export interface CatalogPayload {
+export type CatalogPayload = {
   venues?: Venue[];
   events?: LocalEvent[];
   restaurants?: Restaurant[];
-  /** 即時剩餘席。與 restaurants[].seatsLeft（目錄容量）分開，避免儲存活動時覆寫庫存。 */
   inventory?: Record<string, number>;
-}
+  adBanners?: AdBanner[];
+};
 
-export interface CpaEntry {
+export type CpaEntry = {
   id: string;
   bookingId: string;
   restaurantId: string;
   amount: number;
   status: "billed" | "void";
   createdAt: string;
-}
+};
 
-export interface SyncPayload {
+export type SyncPayload = {
   feeds: FeedId[];
   calendar: CalendarItem[];
   bookings: Booking[];
@@ -187,4 +240,42 @@ export interface SyncPayload {
   clicks: Record<string, number>;
   profile: UserProfile;
   coords?: { lat: number; lng: number } | null;
-}
+};
+
+export type ShareCard = {
+  id: string;
+  type: "attended" | "plan" | "invite";
+  eventTitle?: string;
+  restaurantName?: string;
+  walkMinutes?: number;
+  lastTrainRisk?: "safe" | "tight" | "miss";
+  priceLevel?: 1 | 2 | 3 | 4;
+  perPerson?: number;
+  summary: string;
+  inviteLink?: string;
+  referralCode?: string;
+  luckyLine?: string;
+};
+
+export type AdBanner = {
+  id: string;
+  slot: "live-header" | "after-restaurant" | "booking-confirm";
+  type: "daydream-referral" | "merchant-spotlight" | "cpa-hook";
+  title: string;
+  body: string;
+  cta: string;
+  url: string;
+  emoji: string;
+  frequencyCapPerDay?: number;
+};
+
+export type AuctionSlot = {
+  id: string;
+  eventId: string;
+  windowStart: string;
+  windowEnd: string;
+  topBidAmount: number;
+  topBidRestaurantId?: string;
+  minBid: number;
+  remainingSeatBoost: number;
+};

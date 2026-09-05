@@ -9,6 +9,8 @@ import { recommendRestaurants, seatsRemaining } from "@/lib/rank";
 import { useStore } from "@/lib/store";
 import { bookingMessage, whatsappUrl } from "@/lib/whatsapp";
 import type { Booking, RankedRestaurant } from "@/lib/types";
+import { DaydreamBadge } from "./DaydreamBadge";
+import { ShareCard } from "./ShareCard";
 import { Modal } from "./Modal";
 
 interface Props {
@@ -239,47 +241,67 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
             ))}
           </div>
           {step === "done" && (
-            <div
-              className={`rounded-2xl border p-3 text-sm ${
-                error ? "border-pink/40 bg-pink/10" : "border-mint/30 bg-mint/10"
-              }`}
-            >
-              {error ? (
-                <p>{error}</p>
-              ) : (
-                <>
-                  {ranked.autoChatReady ? "即時留位已確認" : "訂座請求已建立，待商戶確認"}。編號{" "}
-                  <span className="text-gold">{created?.confirmationCode}</span>
-                  ，已寫入你的享時日曆。
-                  {created?.whatsappDispatched ? " 已用 WhatsApp Cloud 通知商戶。" : ""}
-                </>
-              )}
-                  {wa && created && (
-                    <a
-                      href={wa}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 block w-full rounded-xl bg-mint py-2.5 text-center font-black text-bg"
-                    >
-                      {created.whatsappDispatched ? "備用：再開 WhatsApp" : "用 WhatsApp 傳送給商戶"}
-                    </a>
-                  )}
-              {created && (
-                <button
-                  onClick={() =>
-                    downloadText(`ease-${created.confirmationCode}.ics`, bookingToIcs(created))
-                  }
-                  className="mt-2 block w-full rounded-full border border-line py-2 text-sm"
-                >
-                  下載訂座 ICS
-                </button>
-              )}
-              <button
-                onClick={onClose}
-                className="mt-2 block w-full rounded-xl bg-gold py-2.5 font-black text-bg"
+            <div className="space-y-3">
+              <div
+                className={`rounded-2xl border p-3 text-sm ${
+                  error ? "border-pink/40 bg-pink/10" : "border-mint/30 bg-mint/10"
+                }`}
               >
-                返回
-              </button>
+                {error ? (
+                  <p>{error}</p>
+                ) : (
+                  <>
+                    {ranked.autoChatReady ? "即時留位已確認" : "訂座請求已建立，待商戶確認"}。編號{" "}
+                    <span className="text-gold">{created?.confirmationCode}</span>
+                    ，已寫入你的享時日曆。
+                    {created?.whatsappDispatched ? " 已用 WhatsApp Cloud 通知商戶。" : ""}
+                  </>
+                )}
+                {wa && created && (
+                  <a
+                    href={wa}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 block w-full rounded-xl bg-mint py-2.5 text-center font-black text-bg"
+                  >
+                    {created.whatsappDispatched ? "備用：再開 WhatsApp" : "用 WhatsApp 傳送給商戶"}
+                  </a>
+                )}
+                {created && (
+                  <button
+                    onClick={() =>
+                      downloadText(`ease-${created.confirmationCode}.ics`, bookingToIcs(created))
+                    }
+                    className="mt-2 block w-full rounded-full border border-line py-2 text-sm"
+                  >
+                    下載訂座 ICS
+                  </button>
+                )}
+                {created && (
+                  <div className="mt-2 flex justify-end">
+                    <ShareCard
+                      eventId={eventId}
+                      restaurantId={restaurantId}
+                      title={`${restaurant.name} 訂座 ${created.confirmationCode}`}
+                      subtitle="我喺享時訂咗散場位，你都一齊？入去有埋今晚幸運方位 🍀"
+                    />
+                  </div>
+                )}
+                <button
+                  onClick={onClose}
+                  className="mt-2 block w-full rounded-xl bg-gold py-2.5 font-black text-bg"
+                >
+                  返回
+                </button>
+              </div>
+              {created && (
+                <DaydreamBadge
+                  slot="booking-confirm"
+                  eventId={eventId}
+                  restaurantId={restaurantId}
+                  variant="muted"
+                />
+              )}
             </div>
           )}
         </div>

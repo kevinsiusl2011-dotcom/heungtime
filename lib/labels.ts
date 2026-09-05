@@ -6,6 +6,10 @@ export const CATEGORY_LABEL: Record<EventCategory, string> = {
   sports: "賽事",
   mall: "商場",
   exhibition: "演藝展覽",
+  movie: "電影",
+  festival: "節日嘉年華",
+  workshop: "工作坊",
+  nightlife: "夜蒲",
 };
 
 export const FEED_LABEL: Record<FeedId, string> = {
@@ -15,6 +19,10 @@ export const FEED_LABEL: Record<FeedId, string> = {
   "global-sports": "國際賽事",
   malls: "商場限時",
   arts: "演藝展覽",
+  movies: "電影／午夜場",
+  festivals: "節日嘉年華",
+  workshops: "工作坊體驗",
+  nightlife: "蘭桂坊／夜蒲",
 };
 
 export const HOME_DISTRICTS = [
@@ -41,6 +49,11 @@ export const CUISINE_OPTIONS = [
   "燒肉",
   "融合菜",
   "西式 bistro",
+  "點心",
+  "咖啡輕食",
+  "車仔麵",
+  "中式私房菜",
+  "西式 brunch",
 ] as const;
 
 export const PRICE_LABEL = ["", "$", "$$", "$$$", "$$$$"] as const;
@@ -51,6 +64,7 @@ export const DEFAULT_PREFS = {
   cuisines: [] as string[],
   needLastTrain: true,
   homeDistrict: "中環",
+  occasion: "post-event" as const,
 };
 
 export const DEFAULT_PROFILE = {
@@ -60,4 +74,6 @@ export const DEFAULT_PROFILE = {
   onboarded: false,
   prefs: DEFAULT_PREFS,
   syncKey: "",
+  referralCode: "",
+  referredCount: 0,
 };

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CalendarPlus, Send } from "lucide-react";
 import { AutoChatModal } from "@/components/AutoChatModal";
+import { DaydreamBadge, PromoBlockInline } from "@/components/DaydreamBadge";
 import { EmailPreview } from "@/components/EmailPreview";
 import { IcsImport } from "@/components/IcsImport";
 import { NightPlanCard } from "@/components/NightPlanCard";
@@ -180,7 +181,10 @@ function LiveInner() {
   return (
     <div className="min-h-screen pb-16">
       <Nav solid />
-      <div id="main" className="mx-auto grid max-w-[1400px] gap-5 px-4 py-6 lg:grid-cols-[280px_minmax(0,1fr)_340px]">
+      <div className="mx-auto max-w-[1400px] px-4 pt-3 flex justify-end">
+        <DaydreamBadge slot="live-header" eventId={selected.id} variant="compact" />
+      </div>
+      <div id="main" className="mx-auto grid max-w-[1400px] gap-5 px-4 py-4 lg:grid-cols-[280px_minmax(0,1fr)_340px]">
         <aside className="space-y-4">
           <section className="glass rounded-3xl p-4">
             <p className="text-xs uppercase tracking-[0.2em] text-gold">訂閱 Feeds</p>
@@ -242,16 +246,48 @@ function LiveInner() {
           <section className="glass flex h-[460px] flex-col rounded-3xl p-4">
             <p className="text-xs uppercase tracking-[0.2em] text-mint">Agent</p>
             <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1">
-              {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`rounded-2xl px-3 py-2 text-sm leading-6 ${
-                    m.role === "user" ? "ml-6 bg-gold-soft" : "mr-4 border border-line bg-field"
-                  }`}
-                >
-                  <pre className="whitespace-pre-wrap font-sans">{m.text}</pre>
-                </div>
-              ))}
+              {messages.map((m, idx) => {
+                const agentMsgs = messages.filter((x) => x.role === "agent");
+                const agentIdx = agentMsgs.indexOf(m);
+                const isTicketDrop =
+                  m.promoBlock?.label?.includes("搶飛") ||
+                  m.promoBlock?.label?.includes("必睇") === true;
+                const hasLucky =
+                  m.promoBlock?.text?.includes("幸運") ||
+                  m.promoBlock?.text?.includes("搶飛運") ||
+                  m.promoBlock?.text?.includes("方位");
+                return (
+                  <div
+                    key={m.id}
+                    className={`rounded-2xl px-3 py-2 text-sm leading-6 ${
+                      m.role === "user" ? "ml-6 bg-gold-soft" : "mr-4 border border-line bg-field"
+                    }`}
+                  >
+                    <pre className="whitespace-pre-wrap font-sans">{m.text}</pre>
+                    {m.quickReplies && m.quickReplies.length > 0 && m.role === "agent" && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {m.quickReplies.map((qr, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setQuery(qr.label)}
+                            className="rounded-full border border-gold/40 bg-gold/10 px-2.5 py-1 text-[11px] font-semibold text-gold hover:bg-gold/20"
+                          >
+                            {i + 1}. {qr.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {m.role === "agent" && (
+                      <PromoBlockInline
+                        promoBlock={m.promoBlock}
+                        always={isTicketDrop || !!hasLucky}
+                        indexHint={agentIdx < 0 ? idx : agentIdx}
+                      />
+                    )}
+                  </div>
+                );
+              })}
               <div ref={chatEnd} />
             </div>
             <div className="mt-2 flex flex-wrap gap-1">
@@ -381,7 +417,7 @@ function LiveInner() {
             </p>
             <p className="mt-3 text-sm leading-6 text-muted">{selected.description}</p>
             <div className="mt-4">
-              <NightPlanCard plan={plan} />
+              <NightPlanCard plan={plan} eventId={selected.id} />
             </div>
             <div className="mt-4 flex flex-col gap-2">
               <button
@@ -422,6 +458,7 @@ function LiveInner() {
               <RestaurantCard
                 key={r.id}
                 restaurant={r}
+                eventId={selected.id}
                 onBook={() => {
                   click(r.id);
                   setBooking({ restaurantId: r.id, eventId: selected.id });

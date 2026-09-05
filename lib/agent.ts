@@ -1,4 +1,4 @@
-import { EVENTS, RESTAURANTS, restaurantById, venueById } from "./data";
+import { EVENTS, RESTAURANTS, DAYDREAM_REFERRAL_URL, DAYDREAM_BRAND, restaurantById, venueById } from "./data";
 import { formatDateTime, formatTime, hkWeekday, hkYmd, shiftIsoDays } from "./calendar";
 import {
   lastTrainCaption,
@@ -13,6 +13,7 @@ import type {
   Booking,
   CalendarItem,
   ChatMessage,
+  DiningOccasion,
   EventCategory,
   LocalEvent,
   NightPlan,
@@ -21,11 +22,15 @@ import type {
 } from "./types";
 
 const CATEGORY_HINTS: Record<EventCategory, string[]> = {
-  concert: ["演唱會", "陳奕迅", "張學友", "紅館", "亞博", "睇 show", "eason"],
-  "ticket-drop": ["搶飛", "開售", "cityline", "買飛"],
-  sports: ["球賽", "英超", "港超", "nba", "傑志", "阿仙奴", "觀賽", "睇波"],
-  mall: ["商場", "海港城", "k11", "ifc", "時代", "限時", "shopping"],
-  exhibition: ["展覽", "m+", "戲曲", "art", "西九", "牡丹亭", "草間"],
+  concert: ["演唱會", "陳奕迅", "張學友", "紅館", "亞博", "睇 show", "eason", "啟德", "音樂"],
+  "ticket-drop": ["搶飛", "開售", "cityline", "買飛", "預售", "公開發售", "搶票"],
+  sports: ["球賽", "英超", "港超", "nba", "傑志", "阿仙奴", "觀賽", "睇波", "足球", "籃球", "f1"],
+  mall: ["商場", "海港城", "k11", "ifc", "時代", "限時", "shopping", "會員夜", "happy hour"],
+  exhibition: ["展覽", "m+", "戲曲", "art", "西九", "牡丹亭", "草間", "art week", "art basel"],
+  movie: ["電影", "午夜場", "首映", "imax", "沙丘", "吉卜力", "動畫", "戲院", "睇戲"],
+  festival: ["美酒佳餚", "嘉年華", "音樂節", "節日", "freaks out", "wine and dine", "festival"],
+  workshop: ["工作坊", "烹飪班", "陶藝", "手作", "pmq", "art house", "體驗班", "課程"],
+  nightlife: ["蘭桂坊", "lkf", "酒吧", "蒲", "dj", "soho", "蘇豪", "夜店", "clubbing", "酒"],
 };
 
 const STOP_TOKENS = new Set([
@@ -51,6 +56,11 @@ const STOP_TOKENS = new Set([
   "宵夜",
   "附近",
   "推薦",
+  "生日",
+  "慶祝",
+  "約會",
+  "見家長",
+  "傾生意",
 ]);
 
 export type SearchFilters = {
@@ -63,19 +73,32 @@ export type SearchFilters = {
   partySize?: number;
   maxPrice?: 1 | 2 | 3 | 4;
   needLastTrain?: boolean;
+  occasion?: DiningOccasion;
 };
 
 export function detectIntent(query: string): AgentIntent {
   const q = query.toLowerCase();
+  if (/分享|搵朋友|一齊去|傳送|share|invite|打卡/.test(q)) return "share";
   if (/加入|寫入|入曆|加去日曆|\bpin\b/.test(q)) return "pin";
-  if (/幫我訂|想訂座|一鍵訂|開\s*whatsapp/.test(q) && !/訂咗未|已經訂|我訂咗/.test(q)) return "book";
-  if (/改口味|改人數|偏好設定|我的偏好|帳戶設定/.test(q)) return "prefs";
+  if (/幫我訂|想訂座|一鍵訂|開\s*whatsapp|whatsapp/.test(q) && !/訂咗未|已經訂|我訂咗/.test(q)) return "book";
+  if (/改口味|改人數|偏好設定|我的偏好|帳戶設定|場景|慶祝|約會/.test(q)) return "prefs";
   if (/點用|幫助|\bhelp\b|你可以做/.test(q)) return "help";
   return "search";
 }
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
+}
+
+function parseOccasion(query: string): DiningOccasion | undefined {
+  const q = query.toLowerCase();
+  if (/約會|拍拖|date|女朋友|男朋友/.test(q)) return "date";
+  if (/生日|慶祝|週年|結婚|求婚/.test(q)) return "celebration";
+  if (/見客|生意|公司|商務|business|老闆/.test(q)) return "business";
+  if (/屋企人|家庭|一家|阿爸阿媽|仔女/.test(q)) return "family";
+  if (/隨便|fast food|茶餐廳|quick/.test(q)) return "casual";
+  if (/散場|睇完show|賽後|電影散場/.test(q)) return "post-event";
+  return undefined;
 }
 
 export function parseSearchHints(query: string): SearchFilters {
@@ -102,7 +125,17 @@ export function parseSearchHints(query: string): SearchFilters {
     filters.date = hkYmd(shiftIsoDays(new Date().toISOString(), 1));
   }
 
-  const categoryOrder: EventCategory[] = ["ticket-drop", "concert", "sports", "mall", "exhibition"];
+  const categoryOrder: EventCategory[] = [
+    "ticket-drop",
+    "nightlife",
+    "movie",
+    "festival",
+    "workshop",
+    "concert",
+    "sports",
+    "mall",
+    "exhibition",
+  ];
   for (const category of categoryOrder) {
     if ((CATEGORY_HINTS[category] ?? []).some((hint) => q.includes(hint.toLowerCase()))) {
       filters.category = category;
@@ -110,7 +143,7 @@ export function parseSearchHints(query: string): SearchFilters {
     }
   }
 
-  const districts = [...HOME_DISTRICTS, "赤鱲角", "會展", "黃埔"] as const;
+  const districts = [...HOME_DISTRICTS, "赤鱲角", "會展", "黃埔", "蘭桂坊", "西九", "Soho", "蘇豪", "PMQ", "啟德"] as const;
   const district = districts.find((name) => query.includes(name));
   if (district) filters.district = district;
 
@@ -123,8 +156,12 @@ export function parseSearchHints(query: string): SearchFilters {
     if (n >= 1 && n <= 12) filters.partySize = n;
   }
   if (/尾班車|趕車|末班/.test(q)) filters.needLastTrain = true;
-  if (/平啲|便宜|budget/.test(q)) filters.maxPrice = 2;
-  if (/高級|慶祝/.test(q)) filters.maxPrice = 4;
+  if (/平啲|便宜|budget|抵食/.test(q)) filters.maxPrice = 2;
+  if (/高級|慶祝|米芝蓮|fine dining/.test(q)) filters.maxPrice = 4;
+
+  const occasion = parseOccasion(query);
+  if (occasion) filters.occasion = occasion;
+
   return filters;
 }
 
@@ -140,7 +177,7 @@ function applyFilters(events: LocalEvent[], filters: SearchFilters) {
     }
     if (filters.category && event.category !== filters.category) return false;
     if (filters.district) {
-      const blob = `${venue?.district ?? ""} ${venue?.name ?? ""} ${event.tags.join(" ")}`;
+      const blob = `${venue?.district ?? ""} ${venue?.name ?? ""} ${(venue?.tags ?? []).join(" ")} ${event.tags.join(" ")}`;
       if (!blob.includes(filters.district)) return false;
     }
     return true;
@@ -164,6 +201,7 @@ export function interpretQuery(
     maxPrice: hints.maxPrice ?? prefs.maxPrice,
     needLastTrain: hints.needLastTrain ?? prefs.needLastTrain,
     cuisines: hints.cuisine ? [hints.cuisine] : prefs.cuisines,
+    occasion: hints.occasion ?? prefs.occasion,
   };
 
   const tokens = q
@@ -192,11 +230,14 @@ export function interpretQuery(
     matched = applyFilters(EVENTS, hints);
   }
 
-  if (!matched.length && /食|訂|餐廳|宵夜/.test(q)) {
+  if (!matched.length && /食|訂|餐廳|宵夜|酒吧|咖啡/.test(q)) {
     matched = EVENTS.filter((e) => calendar.some((c) => c.eventId === e.id)).slice(0, 3);
   }
 
-  const generic = new Set(["演唱會", "搶飛", "球賽", "商場", "展覽", "concert", "show"]);
+  const generic = new Set([
+    "演唱會", "搶飛", "球賽", "商場", "展覽", "電影", "嘉年華", "工作坊", "酒吧",
+    "concert", "show", "movie", "festival", "workshop",
+  ]);
   const scored = matched.map((event) => {
     let score = 0;
     const blob = `${event.title} ${event.titleEn} ${event.tags.join(" ")}`.toLowerCase();
@@ -254,6 +295,8 @@ export function publicEventView(event: LocalEvent, calendar: CalendarItem[]) {
     lastTrain: venue ? lastTrainCaption(venue) : undefined,
     alreadyInCalendar: calendar.some((c) => c.eventId === event.id),
     relatedEventId: event.relatedEventId,
+    ticketType: event.ticketType,
+    mood: event.mood,
   };
 }
 
@@ -272,6 +315,9 @@ export function publicRestaurantView(restaurant: RankedRestaurant) {
     reasons: restaurant.reasons,
     autoChatReady: restaurant.autoChatReady,
     pitch: restaurant.pitch,
+    boostApplied: restaurant.boostApplied,
+    badge: restaurant.adCreative?.badgeLabel,
+    ambiance: restaurant.ambiance,
   };
 }
 
@@ -282,6 +328,7 @@ export function publicNightPlanView(plan: NightPlan, restaurants: RankedRestaura
     diningWindow: plan.diningWindow,
     lastTrain: plan.lastTrain,
     clash: plan.clash,
+    luckyHint: plan.luckyHint,
     relatedDrop: plan.relatedDrop
       ? { id: plan.relatedDrop.id, title: plan.relatedDrop.title, startAt: plan.relatedDrop.startAt }
       : undefined,
@@ -298,6 +345,7 @@ export function publicBookingView(booking: Booking) {
     slot: booking.slot,
     date: booking.date,
     status: booking.status,
+    referralToken: booking.referralToken,
   };
 }
 
@@ -362,6 +410,10 @@ export function calendarDescription(event: LocalEvent, restaurants: RankedRestau
     });
   }
 
+  lines.push("");
+  lines.push(`🍀 享時夥伴：${DAYDREAM_BRAND} 香港命理網站`);
+  lines.push(`   👉 ${DAYDREAM_REFERRAL_URL}?utm_source=heungtime&utm_campaign=ics-footer`);
+
   return lines.filter(Boolean).join("\n");
 }
 
@@ -388,8 +440,18 @@ ${recs}
 
 一鍵經 WhatsApp 向商戶發送訂座。確認後會寫回你的享時日曆。
 
+🍀 享時夥伴：${DAYDREAM_BRAND} 香港命理網站
+👉 ${DAYDREAM_REFERRAL_URL}?utm_source=heungtime&utm_campaign=email
+
 — 享時 Ease`,
   };
+}
+
+export function generateConfirmationCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "HT-";
+  for (let i = 0; i < 5; i += 1) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
 }
 
 export function autoChatScript(
@@ -398,18 +460,62 @@ export function autoChatScript(
   partySize: number,
   slot: string,
   guestName = "客人",
+  confirmationCode?: string,
+  luckyHint?: string,
 ) {
+  const code = confirmationCode ?? generateConfirmationCode();
   const eventLine = event
     ? `我哋 ${formatTime(event.endAt)} 喺${venueById(event.venueId)?.name ?? ""}散場，想訂 ${slot} ${partySize} 位。`
     : `想訂 ${slot} ${partySize} 位。`;
 
-  return [
-    { from: "user" as const, text: `你好，經享時訂座。${eventLine} 名下 ${guestName || "客人"}。` },
-    {
-      from: "merchant" as const,
-      text: `收到，${restaurant.name} ${slot} ${partySize} 人位已核對。正在發送 WhatsApp 留位。`,
-    },
-  ];
+  const riskBadge =
+    "lastTrainRisk" in restaurant
+      ? restaurant.lastTrainRisk === "safe"
+        ? "✅"
+        : restaurant.lastTrainRisk === "tight"
+          ? "⚠️"
+          : "❌"
+      : "";
+  const riskText =
+    "lastTrainRisk" in restaurant
+      ? restaurant.lastTrainRisk === "safe"
+        ? "尾班車：安全"
+        : restaurant.lastTrainRisk === "tight"
+          ? "尾班車：偏緊"
+          : "尾班車：或趕唔切"
+      : "";
+  const walkText = "walkMinutes" in restaurant ? `步行 ${restaurant.walkMinutes} 分鐘` : "";
+
+  const structuredMerchant = [
+    `[享時確認碼 ${code}]`,
+    `📅 ${event ? formatDateTime(event.startAt).slice(0, 10) : "今日"} ${slot}`,
+    `🍽️ ${restaurant.name}（${restaurant.district}）${walkText ? "｜" + walkText : ""}`,
+    `👥 ${partySize} 人${riskBadge ? "  " + riskBadge + " " + riskText : ""}`,
+    `💡 按 1 即確認／2 改時間／3 睇其他餐廳`,
+  ].join("\n");
+
+  return {
+    structuredHeader: structuredMerchant,
+    confirmationCode: code,
+    quickReplies: [
+      { label: "1 確認", action: "confirm", payload: { code } },
+      { label: "2 改時間", action: "reschedule", payload: { code } },
+      { label: "3 其他餐廳", action: "alternatives", payload: { code } },
+    ],
+    lines: [
+      { from: "user" as const, text: `你好，經享時訂座（${code}）。${eventLine} 名下 ${guestName || "客人"}。` },
+      {
+        from: "merchant" as const,
+        text: `收到，${restaurant.name} ${slot} ${partySize} 人位已核對。正在發送 WhatsApp 留位。\n\n${structuredMerchant}`,
+      },
+      {
+        from: "promo" as const,
+        text: luckyHint
+          ? `🍀 小貼士：${luckyHint}\n   享時夥伴 ${DAYDREAM_BRAND} 👉 ${DAYDREAM_REFERRAL_URL}?utm_source=heungtime&utm_campaign=autochat&ref=${code}`
+          : `🍀 享時夥伴：${DAYDREAM_BRAND} 香港命理 👉 ${DAYDREAM_REFERRAL_URL}?utm_source=heungtime&utm_campaign=autochat&ref=${code}`,
+      },
+    ],
+  };
 }
 
 export function replyFromFindings(input: {
@@ -430,7 +536,19 @@ export function replyFromFindings(input: {
       id,
       role: "agent",
       intent: "help",
-      text: "我可以幫你：把演唱會／搶飛／港超／商場／展覽寫入日曆，按步行、空位同尾班車排附近餐廳，再用 WhatsApp 一鍵訂座。試下：「陳奕迅演唱會之後食飯」或「星期六想睇波，趕尾班車」。",
+      text: "我可以幫你：把演唱會／搶飛／港超／電影／商場／展覽／工作坊／酒吧寫入日曆，按步行、空位同尾班車排附近餐廳，再用 WhatsApp 一鍵訂座。試下：「陳奕迅演唱會之後食飯」「星期六想睇波，趕尾班車」「沙丘3午夜場之後宵夜」。",
+      quickReplies: [
+        { label: "陳奕迅演唱會之後食飯", action: "suggest", payload: "陳奕迅演唱會之後食飯" },
+        { label: "沙丘3午夜場之後宵夜", action: "suggest", payload: "沙丘3午夜場之後宵夜" },
+        { label: "蘭桂坊 DJ Set 之後直落", action: "suggest", payload: "蘭桂坊 DJ Set 之後直落" },
+        { label: "PMQ 烹飪班 + 午餐", action: "suggest", payload: "PMQ 烹飪班 + 午餐" },
+      ],
+      promoBlock: {
+        label: "🍀 享時夥伴",
+        text: "睇埋今日運勢：Daydream Pro 香港命理網站。",
+        url: `${DAYDREAM_REFERRAL_URL}?utm_source=heungtime&utm_campaign=help-empty`,
+        emoji: "🍀",
+      },
     };
   }
 
@@ -448,6 +566,12 @@ export function replyFromFindings(input: {
         role: "agent",
         intent: "search",
         text: `你而家嘅訂座：\n${lines.join("\n")}\n\n要取消或再傳 WhatsApp，去「我的訂座」。`,
+        promoBlock: {
+          label: "🍀 享時夥伴",
+          text: "睇埋今日運勢：Daydream Pro 香港命理網站。",
+          url: `${DAYDREAM_REFERRAL_URL}?utm_source=heungtime&utm_campaign=my-bookings`,
+          emoji: "🍀",
+        },
       };
     }
   }
@@ -456,7 +580,7 @@ export function replyFromFindings(input: {
   const eventLines = events
     .map((e) => {
       const view = publicEventView(e, calendar);
-      return `• ${e.title}｜${formatDateTime(e.startAt)}｜${view.district ?? ""}${view.alreadyInCalendar ? "（已在日曆）" : ""}`;
+      return `• ${e.title}｜${formatDateTime(e.startAt)}｜${view.district ?? ""}${view.alreadyInCalendar ? "（已在日曆）" : ""}${e.ticketType === "presale" ? " 🔥會員預售" : e.ticketType === "public" ? " 🎫公開發售" : ""}`;
     })
     .join("\n");
 
@@ -466,19 +590,21 @@ export function replyFromFindings(input: {
       const risk =
         r.lastTrainRisk === "safe" ? "趕得切" : r.lastTrainRisk === "tight" ? "偏緊" : "或趕唔切";
       const why = r.reasons.slice(0, 2).join("、");
-      return `${i + 1}. ${r.name}・${r.cuisine}｜步行 ${r.walkMinutes} 分鐘｜尚餘 ${r.seatsRemaining} 席｜${risk}${why ? `｜${why}` : ""}`;
+      const badge = r.adCreative?.badgeLabel ? `[${r.adCreative.badgeLabel}] ` : "";
+      return `${i + 1}. ${badge}${r.name}・${r.cuisine}｜步行 ${r.walkMinutes} 分鐘｜尚餘 ${r.seatsRemaining} 席｜${risk}${why ? `｜${why}` : ""}`;
     })
     .join("\n");
 
   const lead = event
-    ? `揾到「${event.title}」。${plan?.diningWindow ?? ""} ${plan?.lastTrain ?? ""}`
+    ? `揾到「${event.title}」${event.mood ? `（${event.mood}）` : ""}。${plan?.diningWindow ?? ""} ${plan?.lastTrain ?? ""}`
     : restaurants.length
       ? "按你日程，附近呢幾間而家有位。"
       : "";
   const clash = plan?.clash ? `\n注意：${plan.clash}` : "";
   const drop = plan?.relatedDrop
-    ? `\n相關搶飛：${plan.relatedDrop.title}（${formatDateTime(plan.relatedDrop.startAt)}）`
+    ? `\n相關搶飛：${plan.relatedDrop.title}（${formatDateTime(plan.relatedDrop.startAt)}${plan.relatedDrop.ticketType === "presale" ? "・會員預售" : ""}）`
     : "";
+  const lucky = plan?.luckyHint ? `\n🍀 命理小貼士：${plan.luckyHint}` : "";
   const extras = extraLines?.length ? `\n${extraLines.join("\n")}` : "";
 
   if (!lead && !eventLines && !foodLines && !extras) {
@@ -486,17 +612,41 @@ export function replyFromFindings(input: {
       id,
       role: "agent",
       intent: events.length ? intent : "help",
-      text: "我可以幫你：把演唱會／搶飛／港超／商場／展覽寫入日曆，按步行、空位同尾班車排附近餐廳，再用 WhatsApp 一鍵訂座。試下：「陳奕迅演唱會之後食飯」或「星期六想睇波，趕尾班車」。",
+      text: "我可以幫你：把演唱會／搶飛／港超／電影／商場／展覽／工作坊／酒吧寫入日曆，按步行、空位同尾班車排附近餐廳，再用 WhatsApp 一鍵訂座。試下：「陳奕迅演唱會之後食飯」或「星期六想睇波，趕尾班車」。",
     };
   }
+
+  const baseQuickReplies = [
+    event && !calendar.some((c) => c.eventId === event.id)
+      ? { label: "加入日曆", action: "pin", payload: event.id }
+      : null,
+    restaurants[0]
+      ? { label: `訂 ${restaurants[0].name.slice(0, 6)}`, action: "book", payload: restaurants[0].id }
+      : null,
+    restaurants[1]
+      ? { label: `睇 ${restaurants[1].name.slice(0, 6)}`, action: "view", payload: restaurants[1].id }
+      : null,
+    { label: "分享俾朋友", action: "share", payload: event?.id ?? restaurants[0]?.id ?? "" },
+  ].filter(Boolean) as { label: string; action: string; payload: string }[];
+
+  const promoBlock: ChatMessage["promoBlock"] = {
+    label: "🍀 享時夥伴",
+    text: plan?.luckyHint
+      ? `${plan.luckyHint} Daydream Pro 香港命理網站。`
+      : "睇埋今日運勢：Daydream Pro 香港命理網站。",
+    url: `${DAYDREAM_REFERRAL_URL}?utm_source=heungtime&utm_campaign=chat-${intent}${event ? "&eid=" + event.id : ""}${restaurants[0] ? "&rid=" + restaurants[0].id : ""}`,
+    emoji: "🍀",
+  };
 
   return {
     id,
     role: "agent",
     intent,
-    text: `${lead}${clash}${drop}${extras}\n\n${eventLines}${foodLines ? `\n\n推薦：\n${foodLines}` : ""}\n\n要加入日曆、開 WhatsApp 訂座，或先睇 Email 行程都可以。`.trim(),
+    text: `${lead}${clash}${drop}${lucky}${extras}\n\n${eventLines}${foodLines ? `\n\n推薦：\n${foodLines}` : ""}\n\n要加入日曆、開 WhatsApp 訂座、Email 行程，或分享俾朋友一齊去都可以。`.trim(),
     eventIds: events.map((e) => e.id),
     restaurantIds: restaurants.map((r) => r.id),
+    quickReplies: baseQuickReplies,
+    promoBlock,
   };
 }
 
