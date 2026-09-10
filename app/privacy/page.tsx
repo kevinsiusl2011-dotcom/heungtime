@@ -26,8 +26,8 @@ export default function PrivacyPage() {
             若你建立同步碼，日曆與偏好會加密傳輸後以該碼索引備份，方便換機還原。誰持有同步碼即可讀取該備份。
           </li>
           <li>
-            若你連接 Google 日曆，我們只保存 OAuth 存取／更新權杖，用來在你指示下寫入你選擇的活動。權杖存在伺服器並以 httpOnly
-            Cookie 對應工作階段。
+            若你連接 Google 日曆，我們只保存 OAuth 存取／更新權杖，用來在你指示下寫入或更新你選擇的活動（同一 UID
+            會覆蓋，避免重複）。權杖存在伺服器並以 httpOnly Cookie 對應工作階段。
           </li>
           <li>
             若已設定 WhatsApp Cloud API，訂座內容會發到你所選餐廳的 WhatsApp 號碼。否則只產生 wa.me

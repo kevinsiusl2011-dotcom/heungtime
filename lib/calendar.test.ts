@@ -1,14 +1,22 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  buildIcs,
+  eventSequence,
+  googleCalendarSubscribeUrl,
   hkHour,
   hkSlotDateTime,
   hkWeekday,
   hkYmd,
+  icalUid,
+  icsEtag,
+  icsStampIso,
   shiftIsoDays,
   toIcsHk,
   weekStart,
 } from "./calendar";
+import { FEED_REVISION } from "./data";
+import type { LocalEvent } from "./types";
 import { confirmationCode } from "./whatsapp";
 import { parseIcs, parseIcsDate } from "./icsParse";
 
@@ -88,6 +96,57 @@ describe("ICS TZID", () => {
 
   it("未知 TZID 唔好默認香港", () => {
     assert.equal(parseIcsDate("20260912T120000", "Not/AZone"), null);
+  });
+
+  it("ICS 訂閱 URL 可以一鍵加去 Google", () => {
+    const url = googleCalendarSubscribeUrl("https://heungtime.hk/api/ics/all");
+    assert.equal(url.startsWith("https://calendar.google.com/calendar/r?cid="), true);
+    assert.ok(url.includes(encodeURIComponent("https://heungtime.hk/api/ics/all")));
+  });
+
+  it("UID 穩定，方便 Google 改期覆蓋而唔重複", () => {
+    assert.equal(icalUid("eason-fear"), "eason-fear@heungtime.hk");
+    assert.equal(icalUid("eason fear!"), "easonfear@heungtime.hk");
+  });
+
+  it("目錄更新後 ICS LAST-MODIFIED 會變新", () => {
+    const event = {
+      id: "test-match",
+      title: "測試賽",
+      titleEn: "Test",
+      category: "sports",
+      feedId: "hk-sports",
+      venueId: "kai-tak",
+      startAt: "2026-09-12T20:00:00+08:00",
+      endAt: "2026-09-12T22:00:00+08:00",
+      description: "原定",
+      tags: [],
+    } as LocalEvent;
+    const before = icsStampIso([event], "2026-09-05T21:00:00+08:00");
+    const after = icsStampIso([{ ...event, startAt: "2026-09-12T21:00:00+08:00" }], "2026-09-10T18:00:00+08:00");
+    assert.ok(Date.parse(after) > Date.parse(before));
+  });
+
+  it("ICS 內含穩定 UID、SEQUENCE 與刷新提示", () => {
+    const event = {
+      id: "test-match",
+      title: "測試賽",
+      titleEn: "Test",
+      category: "sports",
+      feedId: "hk-sports",
+      venueId: "kai-tak",
+      startAt: "2026-09-12T20:00:00+08:00",
+      endAt: "2026-09-12T22:00:00+08:00",
+      description: "原定",
+      tags: [],
+    } as LocalEvent;
+    const ics = buildIcs([event], undefined, "2026-09-10T12:00:00+08:00");
+    assert.match(ics, /UID:test-match@heungtime\.hk/);
+    assert.match(ics, new RegExp(`SEQUENCE:${FEED_REVISION}`));
+    assert.match(ics, /REFRESH-INTERVAL;VALUE=DURATION:PT1H/);
+    assert.match(ics, /LAST-MODIFIED:20260910T040000Z/);
+    assert.notEqual(icsEtag(ics), icsEtag(ics.replace("測試賽", "改期賽")));
+    assert.equal(eventSequence(), FEED_REVISION);
   });
 
   it("Outlook China Standard Time 當香港", () => {

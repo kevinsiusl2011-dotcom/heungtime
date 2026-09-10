@@ -30,13 +30,17 @@ export const metadata: Metadata = {
   },
   robots: { index: true, follow: true },
   alternates: { canonical: "/" },
-  appleWebApp: { capable: true, title: "享時", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "享時", statusBarStyle: "black-translucent" },
 };
 
 const themeBoot = `(function(){try{var t=localStorage.getItem("heungtime-theme");document.documentElement.setAttribute("data-theme",t==="dark"?"dark":"light");}catch(e){document.documentElement.setAttribute("data-theme","light");}})();`;
 
 export const viewport: Viewport = {
-  themeColor: "#f3eee4",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f3eee4" },
+    { media: "(prefers-color-scheme: dark)", color: "#07050d" },
+  ],
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

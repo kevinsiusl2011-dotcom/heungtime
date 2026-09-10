@@ -55,16 +55,17 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
   const booked = useRef(false);
 
   const script = useMemo(() => {
-    if (!ranked) return [];
+    if (!ranked) return null;
     return autoChatScript(ranked, event, partySize, slot, guestName);
   }, [ranked, event, partySize, slot, guestName]);
+  const scriptLines = script?.lines ?? [];
 
   useEffect(() => {
     if (step !== "chat" || !ranked) return;
     setVisible(0);
     setError(null);
     let cancelled = false;
-    const timers = script.map((_, i) =>
+    const timers = scriptLines.map((_, i) =>
       window.setTimeout(() => {
         if (!cancelled) setVisible(i + 1);
       }, 450 * (i + 1)),
@@ -107,7 +108,7 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
         }
         setStep("done");
       })();
-    }, 450 * (script.length + 1) + 350);
+    }, 450 * (scriptLines.length + 1) + 350);
     return () => {
       cancelled = true;
       timers.forEach(clearTimeout);
@@ -229,7 +230,7 @@ export function AutoChatModal({ restaurantId, eventId, onClose }: Props) {
       {(step === "chat" || step === "done") && (
         <div className="space-y-3 px-5 py-5">
           <div className="max-h-72 space-y-2 overflow-y-auto">
-            {script.slice(0, visible).map((m, i) => (
+            {scriptLines.slice(0, visible).map((m, i) => (
               <div
                 key={i}
                 className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${

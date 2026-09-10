@@ -1,8 +1,8 @@
 import type { AdBanner, FeedId, LocalEvent, Restaurant, Venue } from "./types";
 
-export const FEED_REVISION = 5;
-export const FEED_LAST_SYNCED = "2026-09-05T21:00:00+08:00";
-export const FEED_REFRESH_HOURS = 4;
+export const FEED_REVISION = 6;
+export const FEED_LAST_SYNCED = "2026-09-10T12:00:00+08:00";
+export const FEED_REFRESH_HOURS = 1;
 
 export const DAYDREAM_REFERRAL_URL = "https://daydreamprohk.ai";
 export const DAYDREAM_BRAND = "Daydream Pro 香港命理大師";

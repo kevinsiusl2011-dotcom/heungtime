@@ -70,6 +70,9 @@ body {
 body {
   font-family: var(--font-sans);
   min-height: 100vh;
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
   background-image:
     radial-gradient(900px 480px at 0% -10%, var(--glow-a), transparent 52%),
     radial-gradient(800px 420px at 100% 0%, var(--glow-b), transparent 48%),

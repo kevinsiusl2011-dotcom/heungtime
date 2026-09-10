@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { calendarDescription } from "@/lib/agent";
-import { buildIcs } from "@/lib/calendar";
+import { buildIcs, icsEtag, icsStampIso } from "@/lib/calendar";
 import { EVENTS } from "@/lib/data";
 import { DEFAULT_PREFS } from "@/lib/labels";
 import { recommendRestaurants } from "@/lib/rank";
-import { ensurePersist, getInventory } from "@/lib/server/persist";
+import { catalogUpdatedAt, ensurePersist, getInventory } from "@/lib/server/persist";
 import type { FeedId } from "@/lib/types";
 
 const FEED_IDS: FeedId[] = [
@@ -33,15 +33,21 @@ export async function GET(
     const recs = recommendRestaurants(event, DEFAULT_PREFS, [], 3, inventory);
     descriptions[event.id] = calendarDescription(event, recs);
   }
-  const ics = buildIcs(events, descriptions);
+  const stampIso = icsStampIso(events, catalogUpdatedAt());
+  const ics = buildIcs(events, descriptions, stampIso);
+  const etag = icsEtag(ics);
   const download = new URL(req.url).searchParams.get("download");
   return new NextResponse(ics, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
       ...(download
         ? { "Content-Disposition": `attachment; filename="ease-${feed}.ics"` }
-        : {}),
-      "Cache-Control": "public, max-age=300",
+        : {
+            "Content-Disposition": `inline; filename="ease-${feed}.ics"`,
+          }),
+      ETag: etag,
+      "Last-Modified": new Date(stampIso).toUTCString(),
+      "Cache-Control": "public, max-age=300, must-revalidate",
     },
   });
 }
