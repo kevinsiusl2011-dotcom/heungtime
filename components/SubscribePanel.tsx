@@ -15,12 +15,28 @@ export function SubscribePanel({ feed = "all" }: { feed?: string }) {
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        throw new Error("clipboard unavailable");
+      }
     } catch {
-      /* ignore */
+      const el = document.createElement("textarea");
+      el.value = url;
+      el.setAttribute("readonly", "");
+      el.style.position = "fixed";
+      el.style.left = "-9999px";
+      document.body.appendChild(el);
+      el.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* ignore */
+      }
+      el.remove();
     }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
   }
 
   return (
@@ -44,7 +60,7 @@ export function SubscribePanel({ feed = "all" }: { feed?: string }) {
         </a>
         <button
           onClick={copy}
-          className="rounded-full border border-line py-2 text-sm"
+          className="select-none rounded-full border border-line py-2 text-sm"
         >
           {copied ? "已複製訂閱網址" : "複製訂閱 URL（Google「從網址新增」）"}
         </button>
