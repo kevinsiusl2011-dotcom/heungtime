@@ -6,7 +6,7 @@ export default function FaqPage() {
   const items = [
     {
       q: "享時會取代 Google Calendar 嗎？",
-      a: "不會。我們把活動與訂座寫進你正在用的行事曆，並提供 ICS 訂閱與 Google Calendar 範本。",
+      a: "不會。請用「訂閱到 Google 日曆」或貼上 ICS 網址（從網址新增），賽程改期會更新同一個活動。下載 .ics 檔只是一次性匯入，不會跟住改期。若已連接 Google 帳戶，加入或改期的活動會寫回你的主日曆。",
     },
     {
       q: "餐廳排序會不會被廣告買斷？",

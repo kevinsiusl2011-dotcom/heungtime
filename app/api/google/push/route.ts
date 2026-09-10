@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { googleConfigured, insertCalendarEvent } from "@/lib/google";
+import { googleConfigured, upsertCalendarEvent } from "@/lib/google";
 import { getValidAccessToken } from "@/lib/server/googleSession";
 import { clientIp, rateLimit, rateLimitResponse } from "@/lib/server/rateLimit";
 
@@ -20,6 +20,7 @@ export async function POST(req: Request) {
   if (!access) return NextResponse.json({ ok: false, error: "尚未授權或授權已過期" }, { status: 401 });
   try {
     const body = (await req.json()) as {
+      id?: string;
       title?: string;
       startAt?: string;
       endAt?: string;
@@ -36,7 +37,8 @@ export async function POST(req: Request) {
     if (!body.endAt || Number.isNaN(Date.parse(body.endAt))) {
       return NextResponse.json({ ok: false, error: "結束時間無效" }, { status: 400 });
     }
-    await insertCalendarEvent(access, {
+    await upsertCalendarEvent(access, {
+      id: (body.id ?? title).slice(0, 80),
       title,
       startAt: body.startAt,
       endAt: body.endAt,

@@ -79,6 +79,7 @@ interface StoreValue {
   addLead: (lead: Omit<MerchantLead, "id" | "createdAt">) => Promise<void>;
   pushSync: () => Promise<boolean>;
   restoreSync: (key: string) => Promise<boolean>;
+  syncGoogle: (opts?: { silent?: boolean }) => Promise<boolean>;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -297,6 +298,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            id: item.eventId ?? item.id,
             title: item.title,
             startAt: item.startAt,
             endAt: item.endAt,
@@ -547,6 +549,50 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [profile.syncKey, syncPayload]);
 
+  const syncGoogle = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!google.connected) return false;
+      const items = calendar
+        .filter((item) => item.source === "feed" || item.source === "agent")
+        .slice(0, 40)
+        .map((item) => ({
+          id: item.eventId ?? item.id,
+          title: item.title,
+          startAt: item.startAt,
+          endAt: item.endAt,
+          location: item.location,
+          description: item.description,
+        }));
+      if (!items.length) return false;
+      try {
+        const res = await fetch("/api/google/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items }),
+        });
+        const data = (await res.json()) as { ok?: boolean; updated?: number; error?: string };
+        if (!res.ok || !data.ok) {
+          if (!opts?.silent) notify(data.error ?? "Google 日曆同步失敗");
+          return false;
+        }
+        if (!opts?.silent) notify(`已同步 ${data.updated ?? items.length} 項到 Google 日曆`);
+        return true;
+      } catch {
+        if (!opts?.silent) notify("Google 日曆同步失敗");
+        return false;
+      }
+    },
+    [calendar, google.connected, notify],
+  );
+
+  useEffect(() => {
+    if (!ready || !google.connected) return;
+    const t = window.setTimeout(() => {
+      void syncGoogle({ silent: true });
+    }, 1200);
+    return () => window.clearTimeout(t);
+  }, [ready, google.connected, catalogRev, syncGoogle]);
+
   const restoreSync = useCallback(
     async (key: string) => {
       const normalized = key.trim().toUpperCase();
@@ -653,6 +699,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addLead,
       pushSync,
       restoreSync,
+      syncGoogle,
     }),
     [
       ready,
@@ -686,6 +733,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       addLead,
       pushSync,
       restoreSync,
+      syncGoogle,
     ],
   );
 

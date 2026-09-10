@@ -8,12 +8,12 @@ import { DAYDREAM_REFERRAL_URL } from "@/lib/data";
 export function Brand({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const text = size === "lg" ? "text-3xl" : size === "sm" ? "text-lg" : "text-xl";
   return (
-    <div className="flex items-center gap-3">
-      <Link href="/" className="flex items-center gap-2">
-        <span className="relative grid h-9 w-9 rotate-[-8deg] place-items-center rounded-xl bg-gold text-bg shadow-[4px_4px_0_0_#ff3d8a]">
+    <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
+      <Link href="/" className="flex min-w-0 items-center gap-2" aria-label="享時首頁">
+        <span className="relative grid h-9 w-9 shrink-0 rotate-[-8deg] place-items-center rounded-xl bg-gold text-bg shadow-[4px_4px_0_0_#ff3d8a]">
           <span className="text-sm font-black">時</span>
         </span>
-        <span className={`display ${text}`}>
+        <span className={`${text} truncate font-black tracking-tight`}>
           享時
           <span className="ml-1.5 font-sans text-[0.55em] font-bold tracking-widest text-mint">
             LIVE
@@ -44,9 +44,9 @@ export function Nav({ solid = false }: { solid?: boolean }) {
   const pathname = usePathname();
   return (
     <header
-      className={`sticky top-0 z-40 border-b border-line bg-bg/80 backdrop-blur-xl ${solid ? "" : ""}`}
+      className={`sticky top-0 z-40 overflow-visible border-b border-line bg-bg/80 pt-[env(safe-area-inset-top,0px)] backdrop-blur-xl ${solid ? "" : ""}`}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-5 py-3">
         <Brand />
         <nav className="hidden items-center gap-6 text-sm text-muted md:flex">
           {links.map((l) => (
@@ -59,16 +59,17 @@ export function Nav({ solid = false }: { solid?: boolean }) {
             </Link>
           ))}
         </nav>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <ThemeToggle />
           <Link href="/account" className="hidden rounded-xl border border-line px-4 py-2 text-sm md:inline">
             帳戶
           </Link>
           <Link
             href="/live"
-            className="rounded-xl bg-gold px-4 py-2 text-sm font-black text-bg hover:brightness-110"
+            className="rounded-xl bg-gold px-3 py-2 text-sm font-black text-bg hover:brightness-110 sm:px-4"
           >
-            今晚出發
+            <span className="sm:hidden">出發</span>
+            <span className="hidden sm:inline">今晚出發</span>
           </Link>
         </div>
       </div>

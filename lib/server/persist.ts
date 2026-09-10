@@ -103,9 +103,14 @@ export async function saveCatalogOverlay(catalog: CatalogPayload) {
     }
     const serialized = JSON.stringify(getCatalog());
     kvSet("catalog", serialized);
+    kvSet("catalog_updated_at", new Date().toISOString());
     lastCatalogRaw = serialized;
     return { catalog: getCatalog(), skipped };
   });
+}
+
+export function catalogUpdatedAt() {
+  return kvGet("catalog_updated_at");
 }
 
 async function migrateJsonIfNeeded() {

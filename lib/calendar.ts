@@ -129,6 +129,49 @@ export function googleCalendarUrl(item: {
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
+export function googleCalendarSubscribeUrl(icsUrl: string) {
+  return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(icsUrl)}`;
+}
+
+export function icalUid(id: string) {
+  const safe = id.replace(/[^a-zA-Z0-9._-]/g, "");
+  return `${safe || "event"}@heungtime.hk`;
+}
+
+export function fnv1a(input: string) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+export function eventContentKey(event: LocalEvent, description?: string) {
+  return [event.id, event.title, event.startAt, event.endAt, event.venueId, description ?? event.description].join(
+    "|",
+  );
+}
+
+export function eventSequence(_event?: LocalEvent, _description?: string) {
+  return FEED_REVISION;
+}
+
+export function icsStampIso(events: LocalEvent[], catalogUpdatedAt?: string | null) {
+  if (catalogUpdatedAt && !Number.isNaN(Date.parse(catalogUpdatedAt))) {
+    const catalogMs = Date.parse(catalogUpdatedAt);
+    const floorMs = Date.parse(FEED_LAST_SYNCED);
+    return new Date(Math.max(catalogMs, floorMs)).toISOString();
+  }
+  const key = events.map((event) => eventContentKey(event)).join(";");
+  const offsetSec = fnv1a(key) % 86_400;
+  return new Date(Date.parse(FEED_LAST_SYNCED) + offsetSec * 1000).toISOString();
+}
+
+export function icsEtag(body: string) {
+  return `"ics-${fnv1a(body).toString(16)}-r${FEED_REVISION}"`;
+}
+
 export function toIcsDate(iso: string) {
   return new Date(iso)
     .toISOString()
@@ -157,8 +200,12 @@ function foldIcs(line: string) {
   return chunks.join("\r\n");
 }
 
-export function buildIcs(events: LocalEvent[], descriptions?: Record<string, string>) {
-  const stamp = toIcsDate(FEED_LAST_SYNCED);
+export function buildIcs(
+  events: LocalEvent[],
+  descriptions?: Record<string, string>,
+  stampIso?: string,
+) {
+  const calendarStamp = toIcsDate(stampIso ?? icsStampIso(events));
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -187,10 +234,10 @@ export function buildIcs(events: LocalEvent[], descriptions?: Record<string, str
     const desc = descriptions?.[event.id] ?? event.description;
     lines.push(
       "BEGIN:VEVENT",
-      `UID:${event.id}@heungtime.hk`,
-      `DTSTAMP:${stamp}`,
-      `LAST-MODIFIED:${stamp}`,
-      `SEQUENCE:${FEED_REVISION}`,
+      `UID:${icalUid(event.id)}`,
+      `DTSTAMP:${calendarStamp}`,
+      `LAST-MODIFIED:${calendarStamp}`,
+      `SEQUENCE:${eventSequence(event, desc)}`,
       `DTSTART;TZID=Asia/Hong_Kong:${toIcsHk(event.startAt)}`,
       `DTEND;TZID=Asia/Hong_Kong:${toIcsHk(event.endAt)}`,
       foldIcs(`SUMMARY:${escapeIcs(event.title)}`),

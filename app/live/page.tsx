@@ -204,8 +204,8 @@ function LiveInner() {
                 </button>
               ))}
             </div>
-            <Link href="/api/ics/all?download=1" className="mt-3 block text-xs text-mint">
-              下載靜態 ICS（備援）
+            <Link href="/api/ics/all" className="mt-3 block text-xs text-mint">
+              訂閱 ICS 網址（會持續更新）
             </Link>
             <div className="mt-3">
               <IcsImport compact />
@@ -236,7 +236,7 @@ function LiveInner() {
             </button>
             {google.configured ? (
               <a href="/api/google/auth" className="mt-2 block text-center text-xs text-mint">
-                {google.connected ? "Google 日曆已連接（加入時會寫入）" : "連接 Google 日曆寫入"}
+                {google.connected ? "Google 日曆已連接（會持續同步）" : "連接 Google 日曆持續同步"}
               </a>
             ) : (
               <p className="mt-2 text-[11px] text-muted">未設 Google OAuth，請用 ICS 訂閱。</p>

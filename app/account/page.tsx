@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { IcsImport } from "@/components/IcsImport";
@@ -27,6 +27,7 @@ function AccountInner() {
     updateProfile,
     notify,
     google,
+    syncGoogle,
     coords,
     requestGeo,
     enableDropAlerts,
@@ -43,6 +44,8 @@ function AccountInner() {
   const [needLastTrain, setNeedLastTrain] = useState(true);
   const [cuisines, setCuisines] = useState<string[]>([]);
   const [restoreKey, setRestoreKey] = useState("");
+  const googleQueryHandled = useRef<string | null>(null);
+  const googleOkSynced = useRef(false);
 
   useEffect(() => {
     if (!ready) return;
@@ -58,11 +61,18 @@ function AccountInner() {
 
   useEffect(() => {
     const g = searchParams.get("google");
-    if (g === "ok") notify("Google 日曆已連接，之後加入活動會嘗試寫入");
+    if (!g) return;
+    if (g === "ok" && google.connected && !googleOkSynced.current) {
+      googleOkSynced.current = true;
+      notify("Google 日曆已連接，正在同步你已加入的活動");
+      void syncGoogle({ silent: false });
+    }
+    if (googleQueryHandled.current === g) return;
+    googleQueryHandled.current = g;
     if (g === "denied") notify("Google 授權已取消");
     if (g === "error") notify("Google 授權失敗");
     if (g === "missing") notify("尚未設定 Google OAuth，請用 ICS 訂閱");
-  }, [searchParams, notify]);
+  }, [searchParams, notify, syncGoogle, google.connected]);
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -201,9 +211,20 @@ function AccountInner() {
           開啟搶飛瀏覽器通知
         </button>
         {google.configured ? (
-          <a href="/api/google/auth" className="block rounded-full border border-line py-2 text-center text-sm">
-            {google.connected ? "重新連接 Google 日曆" : "連接 Google 日曆（加入活動時寫入）"}
-          </a>
+          <>
+            <a href="/api/google/auth" className="block rounded-full border border-line py-2 text-center text-sm">
+              {google.connected ? "重新連接 Google 日曆" : "連接 Google 日曆（持續同步）"}
+            </a>
+            {google.connected ? (
+              <button
+                type="button"
+                onClick={() => void syncGoogle()}
+                className="w-full rounded-full bg-gold py-2 text-sm font-black text-bg"
+              >
+                立即同步到 Google 日曆
+              </button>
+            ) : null}
+          </>
         ) : (
           <p className="text-xs text-muted">未設定 GOOGLE_CLIENT_ID。可先用 ICS 訂閱，見 .env.example。</p>
         )}
