@@ -146,7 +146,7 @@ describe("ICS TZID", () => {
     assert.match(ics, /REFRESH-INTERVAL;VALUE=DURATION:PT1H/);
     assert.match(ics, /LAST-MODIFIED:20260910T040000Z/);
     assert.notEqual(icsEtag(ics), icsEtag(ics.replace("測試賽", "改期賽")));
-    assert.equal(eventSequence(event), FEED_REVISION);
+    assert.equal(eventSequence(), FEED_REVISION);
   });
 
   it("Outlook China Standard Time 當香港", () => {

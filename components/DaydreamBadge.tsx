@@ -90,7 +90,7 @@ export function DaydreamBadge({
         className={`inline-flex items-center gap-1.5 rounded-full border border-line/60 bg-surface/60 px-3 py-1 text-[11px] font-semibold text-muted hover:border-pink/40 hover:text-pink ${className}`}
       >
         <span className="text-sm">{banner.emoji ?? "🍀"}</span>
-        <span className="whitespace-nowrap">{banner.headline?.slice(0, 14) ?? "睇埋今日運勢"} →</span>
+        <span className="whitespace-nowrap">{banner.title.slice(0, 14)} →</span>
       </a>
     );
   }
@@ -105,7 +105,7 @@ export function DaydreamBadge({
       >
         <span>{banner.emoji ?? "🍀"}</span>
         <span className="flex-1 truncate">
-          {banner.headline ?? "睇完活動，順便睇今日嘅愛情・事業・偏財運"}
+          {banner.title}
         </span>
       </a>
     );
@@ -126,10 +126,10 @@ export function DaydreamBadge({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted">
-            {banner.label ?? DAYDREAM_BRAND}
+            {DAYDREAM_BRAND}
           </p>
           <p className="mt-0.5 text-xs font-medium leading-snug text-ink line-clamp-2">
-            {banner.headline ?? "睇完活動，順便問吓今日嘅愛情・事業・偏財運 🍀"}
+            {banner.body}
           </p>
           <p className="mt-0.5 text-[10px] text-mint font-semibold">
             {banner.cta ?? "睇睇 →"}

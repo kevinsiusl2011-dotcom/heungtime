@@ -101,7 +101,6 @@ function bookingCalendarItem(created: Booking) {
     description: calendarDescription(
       event as LocalEvent,
       restaurant ? [restaurant as unknown as RankedRestaurant] : [],
-      created,
     ),
     source: "agent" as const,
     restaurantIds: [created.restaurantId],

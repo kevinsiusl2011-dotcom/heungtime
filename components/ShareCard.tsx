@@ -92,7 +92,7 @@ export function ShareCard({
               <p className="mt-2 text-sm text-ink leading-6">
                 朋友經你連結加入享時，會自動帶你嘅推薦標籤；未來商戶合作優惠，你哋兩邊都有著數。
               </p>
-              {profile.referredCount > 0 && (
+              {(profile.referredCount ?? 0) > 0 && (
                 <p className="mt-2 text-xs font-semibold text-mint">
                   已經成功邀請 {profile.referredCount} 位朋友 🎉
                 </p>

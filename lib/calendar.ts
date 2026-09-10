@@ -153,7 +153,7 @@ export function eventContentKey(event: LocalEvent, description?: string) {
   );
 }
 
-export function eventSequence(_event?: LocalEvent, _description?: string) {
+export function eventSequence() {
   return FEED_REVISION;
 }
 
@@ -237,7 +237,7 @@ export function buildIcs(
       `UID:${icalUid(event.id)}`,
       `DTSTAMP:${calendarStamp}`,
       `LAST-MODIFIED:${calendarStamp}`,
-      `SEQUENCE:${eventSequence(event, desc)}`,
+      `SEQUENCE:${eventSequence()}`,
       `DTSTART;TZID=Asia/Hong_Kong:${toIcsHk(event.startAt)}`,
       `DTEND;TZID=Asia/Hong_Kong:${toIcsHk(event.endAt)}`,
       foldIcs(`SUMMARY:${escapeIcs(event.title)}`),
